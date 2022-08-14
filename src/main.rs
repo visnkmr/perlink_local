@@ -646,26 +646,27 @@ let (s, r) = fltk::app::channel();
             b11.set_label("All browsers");
             // b1.emit(s, "refresh".to_string());
             // let mut hpack=hpack.clone();
-            b11.handle(move|b, ev| match ev {
-                fltk::enums::Event::Push => {
-                    // i1.value();
-                    // if(cb1.is_checked()){
-                    //     set_token(Notimes.to_string(),format!("{:?}",i1.value().to_string()));
-                    // }
+            b11.emit(s.clone(),"all".to_string());
+            // b11.handle(move|b, ev| match ev {
+            //     fltk::enums::Event::Push => {
+            //         // i1.value();
+            //         // if(cb1.is_checked()){
+            //         //     set_token(Notimes.to_string(),format!("{:?}",i1.value().to_string()));
+            //         // }
                     
-                    // println!("{}",format!("{} {}",browser,expandedurl));
-                    for (k,v) in setup(){
-                        let mut res = Command::new(format!("{}",v))
-                                        .arg(format!("{}",ourl))
-                                        .output();
-                    }
-                    // set_token(ChosenBrowser.to_string(),browser.to_string());
+            //         // println!("{}",format!("{} {}",browser,expandedurl));
+            //         for (k,v) in setup(){
+            //             let mut res = Command::new(format!("{}",v))
+            //                             .arg(format!("{}",ourl))
+            //                             .output();
+            //         }
+            //         // set_token(ChosenBrowser.to_string(),browser.to_string());
                     
-                    fltk::app::quit();
-                    true
-                }
-                _ => false,
-            });
+            //         fltk::app::quit();
+            //         true
+            //     }
+            //     _ => false,
+            // });
 
             ttb.end();
             ttb.set_type(fltk::group::PackType::Horizontal);
@@ -681,43 +682,44 @@ let (s, r) = fltk::app::channel();
                     fltk::frame::Frame::default().with_size(20, 10);
                     let mut b1 = Button::default().with_size(90,60);
                     b1.set_label(&format!("{}",k));
+                    b1.emit(s.clone(),v);
                     // b1.emit(s, "refresh".to_string());
                     // let mut hpack=hpack.clone();
-                    b1.handle(move|b, ev| match ev {
-                        fltk::enums::Event::Push => {
-                            // i1.value();
-                            // if(cb1.is_checked()){
-                            //     set_token(Notimes.to_string(),format!("{:?}",i1.value().to_string()));
-                            // }
+                    // b1.handle(move|b, ev| match ev {
+                    //     fltk::enums::Event::Push => {
+                    //         // i1.value();
+                    //         // if(cb1.is_checked()){
+                    //         //     set_token(Notimes.to_string(),format!("{:?}",i1.value().to_string()));
+                    //         // }
                             
-                            // println!("{}",format!("{} {}",browser,expandedurl));
-                            // set_token(ChosenBrowser.to_string(),browser.to_string());
+                    //         // println!("{}",format!("{} {}",browser,expandedurl));
+                    //         // set_token(ChosenBrowser.to_string(),browser.to_string());
                            
-                        //     if cfg!(windows){
-                        //     if(v.contains("exe")){
-                        //         let mut res = Command::new(format!("{}",v))
-                        //                     .arg(format!("{}",expandedurl))
-                        //                     .output();
-                        //                     fltk::app::quit();
-                        //     }
-                        //     else{
-                        //          fltk::dialog::message(90, 90, "Please setup config before use. You can find it at D");{
-                        //     }
-                        //     }
-                        // }
-                        // else
-                        {
-                                let mut res = Command::new(format!("{}",v))
-                                                .arg(format!("{}",expandedurl))
-                                                .output();
-                                                println!("oepning----->{}",expandedurl);
-                                                fltk::app::quit();
-                            }
+                    //     //     if cfg!(windows){
+                    //     //     if(v.contains("exe")){
+                    //     //         let mut res = Command::new(format!("{}",v))
+                    //     //                     .arg(format!("{}",expandedurl))
+                    //     //                     .output();
+                    //     //                     fltk::app::quit();
+                    //     //     }
+                    //     //     else{
+                    //     //          fltk::dialog::message(90, 90, "Please setup config before use. You can find it at D");{
+                    //     //     }
+                    //     //     }
+                    //     // }
+                    //     // else
+                    //     {
+                    //             let mut res = Command::new(format!("{}",v))
+                    //                             .arg(format!("{}",expandedurl))
+                    //                             .output();
+                    //                             println!("oepning----->{}",expandedurl);
+                    //                             fltk::app::quit();
+                    //         }
                         
-                        true
-                        }
-                        _ => false,
-                    });
+                    //     true
+                    //     }
+                    //     _ => false,
+                    // });
                     i+=1;
                     if(i%3 ==0){
                         println!("i value--------->{}",i);
@@ -747,10 +749,30 @@ let (s, r) = fltk::app::channel();
                     Some(val) => match val {
                         val => {
                             // let mut str=val;
-                            println!("{}",format!("{}",val));
+                            if(val.contains("//")){
+
+                                println!("{}",format!("{}",val));
                             ourl=format!("{}",val);
                             expandedurl=val;
                             true;
+                            }
+                            else if(val == "all"){
+                                for (k,v) in setup(){
+                                    let mut res = Command::new(format!("{}",v))
+                                                    .arg(format!("{}",ourl))
+                                                    .output();
+                                }
+                                true;
+                            }
+                            else{
+                                let mut res = Command::new(format!("{}",val))
+                                                .arg(format!("{}",expandedurl))
+                                                .output();
+                                                println!("oepning----->{}",expandedurl);
+                                                fltk::app::quit();
+                                                true;
+                            }
+                            
                             // frame.set_label(&val);
                             
                         },
