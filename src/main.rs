@@ -222,7 +222,8 @@ struct MyConfig {
 // }
 pub fn link_finder_str(input: &str) -> Vec<String> {
     let mut links_str = Vec::new();
-    let finder = LinkFinder::new();
+    let mut finder = LinkFinder::new();
+    finder.kinds(&[LinkKind::Url]);
     let links: Vec<_> = finder.links(input).collect();
 
     for link in links.iter() {
@@ -417,12 +418,13 @@ let (s, r) = fltk::app::channel();
                     for i in connection.window_titles().unwrap(){
                         // println!("{}",i.to_lowercase());
                         for kj in link_finder_str(&i){
+                            let ss: String = kj.chars().skip(0).take(40).collect();
                             let mut b = Button::default()
                                     .with_size(70, 20)
-                                    .with_label(&kj.to_string())
+                                    .with_label(&ss)
                                     // .with_align(Align::Left | Align::Inside)
                                     ;
-                                    b.emit(s.clone(),b.label());
+                                    b.emit(s.clone(),kj.to_string());
                                 b.set_down_frame(FrameType::FlatBox);
                                 b.set_selection_color(Color::color_average(b.color(), Color::Foreground, 0.9));
                                 b.clear_visible_focus();
