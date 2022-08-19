@@ -1,3 +1,9 @@
+[profile.release]
+strip = true  # Automatically strip symbols from the binary.
+opt-level = "z"
+lto = true
+panic = "abort"
+
 [package]
 name = "perlink"
 version = "0.1.1"
@@ -12,3 +18,5 @@ abserde = "0.3.3"
 serde = {version = "1.0.140", features = ["derive"]}
 window_titles = { git = "https://github.com/HiruNya/window_titles"}
 linkify = "0.9.0"
+arboard = "2.1.1"
+indexmap = { version = "1.9.1", features = ["serde"] }

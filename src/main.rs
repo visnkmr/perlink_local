@@ -1,9 +1,9 @@
-#![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"]
 
 use std::{env,rc};
 use window_titles::{Connection, ConnectionTrait};
-
-
+use arboard::Clipboard;
+use indexmap::{IndexMap};
 extern crate linkify;
 
 use linkify::{LinkFinder, LinkKind};
@@ -17,7 +17,7 @@ use fltk::{
     window::Window,
     button::{Button,CheckButton},
    input::Input,
-    prelude::*,
+    prelude::*, frame::Frame,
 };
 
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,8 @@ use std::fs::create_dir_all;
 fn eurl(t: String) -> Result<String> {
     // return Ok("try".to_string());
     println!("get {} val----->{}","expanding",t);
-    let mut response = isahc::get(format!("https://unshorten.me/s/{}",t).as_str())?;
+    let(hmap,su)=setup();
+    let mut response = isahc::get(format!("{}{}",su,t).as_str())?;
     // println!("get {} val----->{}","expanded url",response.text()?);
 
     // Print some basic info about the response to standard output.
@@ -46,12 +47,14 @@ fn eurl(t: String) -> Result<String> {
 }
 #[derive(Serialize, Deserialize, Default, Debug)]
 struct MyConfig {
+    shortenusing: String,
 	// window_width: usize,
 	// window_height: usize,
 	// window_x: usize,
 	// window_y: usize,
 	// theme: String,
-	user_data: HashMap<String, String>,
+    #[serde(with = "indexmap::serde_seq")]
+	user_data: IndexMap<String, String>,
 }
 
 // #[derive(Default)]
@@ -63,7 +66,7 @@ struct MyConfig {
 // const Notimes: &str = "ntimes";
 // const Isenb: &str = "isenb";
 // const PREFERENCES_KEY: &str = "prefs";
-    fn setup() -> HashMap<String,String> {
+    fn setup() -> (IndexMap<String,String>,String) {
         let my_abserde = Abserde {
             app: "perlink".to_string(),
             location: Location::Auto,
@@ -71,7 +74,7 @@ struct MyConfig {
         };
         
         // my_abserde.delete().expect("");    
-        let mut pref = HashMap::<String,String>::new();
+        let mut pref = IndexMap::<String,String>::new();
         let browsers_names = ["firefox","chromium","waterfox","vivaldi stable","firefox dev","firefox beta"];
         // let mut browsers = ["V:\\Firefox\\firefox.exe","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
         let mut browsers = ["firefox","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
@@ -83,6 +86,7 @@ struct MyConfig {
         }
         
         let mut my_config = MyConfig {
+            shortenusing: "https://unshorten.me/s/".to_string(),
         // 	window_width: 90,
         // window_height: 45,
         // window_x: 45,
@@ -131,7 +135,7 @@ struct MyConfig {
                 // }
                 // else
                 {
-                    MyConfig::load_config(&my_abserde).expect("").user_data
+                    (MyConfig::load_config(&my_abserde).expect("").user_data,MyConfig::load_config(&my_abserde).expect("").shortenusing)
                 }
                 
                 
@@ -385,24 +389,29 @@ let (s, r) = fltk::app::channel();
                 WIDGET_HEIGHT - 40,"");
                 win.resizable(&vpack);
             // let mut tbpack=fltk::group::Pack::default().with_size(250,60).center_of(&win);    
-                let mut frame = fltk::frame::Frame::default()
+                let mut framet = fltk::frame::Frame::default()
                 .with_size(800,60)
                 // .center_of(&win)
-                .with_label(&ourl);
+                .with_label("Loading");
                 // let mut kz = Button::new(0,0,70,20,"test");
                 //                     // .with_align(Align::Left | Align::Inside)
                 //                     kz.emit(s.clone(),"b.label()");
                 
-            frame.set_label_size(12);
+            framet.set_label_size(12);
+            // let mut rt= fltk::frame::Frame::default().with_size(20, 10);
+            // rt.set_label("sd");
             match args.get(1) {
                 Some(val) => match val {
                     val => {
                         expandedurl=val.to_string();
                         ourl=val.to_string();
+                        setframe(&mut framet,&val);
+                        // rt.set_label("");
                     }
                     _ =>{
                         expandedurl=" ".to_string();
                         ourl=" ".to_string();
+                        setframe(&mut framet,&"invalid url".to_string());
                     },
                     // Message::Stop => rlist(),
                 },
@@ -424,7 +433,8 @@ let (s, r) = fltk::app::channel();
                                     .with_label(&ss)
                                     // .with_align(Align::Left | Align::Inside)
                                     ;
-                                    b.emit(s.clone(),kj.to_string());
+                                    b.set_tooltip(&kj);
+                                    b.emit(s.clone(),kj);
                                 b.set_down_frame(FrameType::FlatBox);
                                 b.set_selection_color(Color::color_average(b.color(), Color::Foreground, 0.9));
                                 b.clear_visible_focus();
@@ -462,9 +472,23 @@ let (s, r) = fltk::app::channel();
                         //         }
                         // });
                                 
-                            println!("{}",kj);
+                            // println!("{}",kj);
                         }
                     }
+                    let mut clipboard = Clipboard::new().unwrap();
+                    for kj in link_finder_str(&clipboard.get_text().unwrap()){
+                        let ss: String = kj.chars().skip(0).take(40).collect();
+                        let mut b = Button::default()
+                            .with_size(70, 20)
+                            .with_label(&ss);
+                        b.emit(s.clone(),kj.to_string());
+                        b.set_tooltip(&kj);
+                        b.set_down_frame(FrameType::FlatBox);
+                        b.set_selection_color(Color::color_average(b.color(), Color::Foreground, 0.9));
+                        b.clear_visible_focus();
+                        b.set_frame(FrameType::FlatBox);
+                    println!("{}",kj);
+                    }                   
                 }
                     
             ,
@@ -612,36 +636,37 @@ let (s, r) = fltk::app::channel();
                 fltk::frame::Frame::default().with_size(20, 30);
             let mut eub = Button::default().with_size(150,30);
             eub.set_label("expand url");
-            
+            eub.emit(s.clone(),"expandurl".to_string());
             // b1.emit(s, "refresh".to_string());
             // let mut hpack=hpack.clone();
-            eub.handle(move|b, ev| match ev {
-                fltk::enums::Event::Push => {
-                    // frame.set_label(&"Expanding URL, Please wait!".to_string());
-                    match eurl(args.get(1).unwrap().to_string()) {
-                        Ok(sk) => { 
-                            if(sk.to_lowercase().contains("invalid")){
-                                frame.set_label(args.get(1).unwrap());
-                            }
-                            else{
-                                frame.set_label(&sk);
-                            }
+            // eub.handle(move|b, ev| match ev {
+            //     fltk::enums::Event::Push => {
+            //         // frame.set_label(&"Expanding URL, Please wait!".to_string());
+            //         match eurl(args.get(1).unwrap().to_string()) {
+            //             Ok(sk) => { 
+            //                 if(sk.to_lowercase().contains("invalid")){
+            //                     setframe(&mut framet,args.get(1).unwrap());
+            //                     // rt.set_label("");
+            //                 }
+            //                 else{
+            //                     setframe(&mut framet, &sk);
+            //                 }
                             
-                            // fltk::dialog::message(90, 90, &sk);{
-                                // let mut res = std::process::Command::new(format!("/home/roger/Downloads/waterfox/waterfox {}",sk)).output();
-                            // }
+            //                 // fltk::dialog::message(90, 90, &sk);{
+            //                     // let mut res = std::process::Command::new(format!("/home/roger/Downloads/waterfox/waterfox {}",sk)).output();
+            //                 // }
                             
-                            // ... use sk ...
-                        },
-                        Err(e) => {
-                            frame.set_label("Error");
-                            // ... sk is not available, and e explains why ...
-                        },
-                    }
-                    true
-                }
-                _ => false,
-            });
+            //                 // ... use sk ...
+            //             },
+            //             Err(e) => {
+            //                 setframe(&mut framet,"Error");
+            //                 // ... sk is not available, and e explains why ...
+            //             },
+            //         }
+            //         true
+            //     }
+            //     _ => false,
+            // });
             fltk::frame::Frame::default().with_size(20, 10);
             // let mut bframe1 = fltk::frame::Frame::default().with_size(300, 60);
             let mut b11 = Button::default().with_size(150,30);
@@ -679,7 +704,8 @@ let (s, r) = fltk::app::channel();
                 // browsers=browsers.clone();
                 let mut i=0;
                 // let mut bl:PreferencesMap<String> = setup();
-                for (k,v) in setup() {
+                let(hmap,su)=setup();
+                for (k,v) in hmap {
                     let expandedurl=expandedurl.clone();
                     fltk::frame::Frame::default().with_size(20, 10);
                     let mut b1 = Button::default().with_size(90,60);
@@ -745,21 +771,58 @@ let (s, r) = fltk::app::channel();
 
             win.end();
             win.show();
+            // let mut frame1 =frame.clone();
             while app.wait() {
+                // setframe(&mut frame, "");
                 // frame=frame.clone();
                 match r.recv() {
+                    
                     Some(val) => match val {
                         val => {
+                            
                             // let mut str=val;
                             if(val.contains("//")){
+                                // let k= format!("{}",val);
+                                // frame.set_label(&k);
+                                setframe(&mut framet, &val);
+                                println!("//------------->");
 
                                 println!("{}",format!("{}",val));
                             ourl=format!("{}",val);
                             expandedurl=val;
+                            // rt.set_label("title");
+                            // frame.set_label("");
+                            // setframe(&mut frame,"");
+                            
                             true;
                             }
+                            else if val == "expandurl"{
+                                match eurl(ourl.clone()) {
+                                    Ok(sk) => { 
+                                        if(sk.to_lowercase().contains("invalid")){
+                                            setframe(&mut framet,args.get(1).unwrap());
+                                            // rt.set_label("");
+                                        }
+                                        else{
+                                            setframe(&mut framet, &sk);
+                                        }
+                                        
+                                        // fltk::dialog::message(90, 90, &sk);{
+                                            // let mut res = std::process::Command::new(format!("/home/roger/Downloads/waterfox/waterfox {}",sk)).output();
+                                        // }
+                                        
+                                        // ... use sk ...
+                                    },
+                                    Err(e) => {
+                                        setframe(&mut framet,"Error");
+                                        // ... sk is not available, and e explains why ...
+                                    },
+                                }
+                            }
                             else if(val == "all"){
-                                for (k,v) in setup(){
+                                println!("all------------->");
+                                let(hmap,su)=setup();
+                                for (k,v) in hmap{
                                     let mut res = Command::new(format!("{}",v))
                                                     .arg(format!("{}",ourl))
                                                     .output();
@@ -767,6 +830,8 @@ let (s, r) = fltk::app::channel();
                                 true;
                             }
                             else{
+                                println!("expand?------------->");
+                                
                                 let mut res = Command::new(format!("{}",val))
                                                 .arg(format!("{}",expandedurl))
                                                 .output();
@@ -782,9 +847,15 @@ let (s, r) = fltk::app::channel();
                     },
                     None => ({
                         // println!("stop");
-                    }),
+                    })
                 }
+                // let frame=win.frame.clone();
+                // frame.set_label("&val");
             }
-            app.run().unwrap();    
+            // app.run().unwrap();    
             
+}
+fn setframe(f:&mut Frame,s: &str){
+    let ss: String = s.chars().skip(0).take(40).collect();
+    f.set_label(&ss);
 }
