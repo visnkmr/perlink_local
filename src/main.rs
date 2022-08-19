@@ -21,7 +21,9 @@ use fltk::{
 };
 
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+use std::process::{Command,Stdio};
+use execute::{Execute, command};
+
 use isahc::prelude::*;
 // extern crate preferences;
 use std::collections::HashMap;
@@ -823,18 +825,14 @@ let (s, r) = fltk::app::channel();
                                 println!("all------------->");
                                 let(hmap,su)=setup();
                                 for (k,v) in hmap{
-                                    let mut res = Command::new(format!("{}",v))
-                                                    .arg(format!("{}",ourl))
-                                                    .output();
+                                    open(&v,&ourl);
                                 }
                                 true;
                             }
                             else{
                                 println!("expand?------------->");
                                 
-                                let mut res = Command::new(format!("{}",val))
-                                                .arg(format!("{}",expandedurl))
-                                                .output();
+                                open(&val,&expandedurl);
                                                 println!("oepning----->{}",expandedurl);
                                                 fltk::app::quit();
                                                 true;
@@ -858,4 +856,14 @@ let (s, r) = fltk::app::channel();
 fn setframe(f:&mut Frame,s: &str){
     let ss: String = s.chars().skip(0).take(40).collect();
     f.set_label(&ss);
+}
+fn open(v: &String,ourl: &String){
+    // let mut res = Command::new(format!("{}",v))
+    //                                                 .arg(format!("{}",ourl))
+    //                                                 .output();
+
+    let mut command = command(format!("{} {}",v,ourl));
+                command.stdout(Stdio::piped());
+        let output = command.execute_output().unwrap();
+        println!("{}", String::from_utf8(output.stdout).unwrap());
 }
