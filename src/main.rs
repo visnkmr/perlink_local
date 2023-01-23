@@ -1,6 +1,6 @@
-// #![windows_subsystem = "windows"]
+#![windows_subsystem = "windows"]
 
-use std::{env,rc};
+use std::{env,rc, process::{self, ExitCode}};
 use window_titles::{Connection, ConnectionTrait};
 use arboard::Clipboard;
 use indexmap::{IndexMap};
@@ -22,7 +22,7 @@ use fltk::{
 
 use serde::{Deserialize, Serialize};
 use std::process::{Command,Stdio};
-use execute::{Execute, command};
+// use execute::{Execute, command};
 
 use isahc::prelude::*;
 // extern crate preferences;
@@ -31,11 +31,11 @@ use abserde::*;
 
 use std::fs::create_dir_all;
 // const APP_INFO: AppInfo = AppInfo{name: "Perlink", author: "visnk"};
-
-fn eurl(t: String) -> Result<String> {
+const appname: &str = "perlink";
+fn eurl(my_abserde:&Abserde,t: String) -> Result<String> {
     // return Ok("try".to_string());
     println!("get {} val----->{}","expanding",t);
-    let(hmap,su)=setup();
+    let(hmap,su)=setup(my_abserde);
     let mut response = isahc::get(format!("{}{}",su,t).as_str())?;
     // println!("get {} val----->{}","expanded url",response.text()?);
 
@@ -68,18 +68,105 @@ struct MyConfig {
 // const Notimes: &str = "ntimes";
 // const Isenb: &str = "isenb";
 // const PREFERENCES_KEY: &str = "prefs";
-    fn setup() -> (IndexMap<String,String>,String) {
-        let my_abserde = Abserde {
-            app: "perlink".to_string(),
-            location: Location::Auto,
-            format: Format::Json,
-        };
+fn appendfile(my_abserde:&Abserde,browsername:String,browsercommand:String){
+    let mut blist=IndexMap::new() ;
+    let mut sb:String=String::new();
+                match MyConfig::load_config(my_abserde){
+                    Ok(map) => {
+                    //   pref=map.bookmarklist;
+                      blist=map.user_data;
+                      sb=map.shortenusing;
+                    //   users=map.users;
+                    }
+                    Err(e) => {
+                      
+                    }
+                  }
+                blist.insert(browsername, browsercommand);
+               
+                let my_config = MyConfig {
+                    user_data: blist,
+                    shortenusing:sb,
+                };
+                println!("reloading");
+                my_config.save_config(&my_abserde);
+}
+fn clear(my_abserde:&Abserde){
+    
+    
+    // my_abserde.delete().expect("");    
+    let mut pref = IndexMap::<String,String>::new();
+    
+    
+    let mut my_config = MyConfig {
+        shortenusing: "https://unshorten.me/s/".to_string(),
+    // 	window_width: 90,
+    // window_height: 45,
+    // window_x: 45,
+    // window_y: 45,
+    // theme: "".to_string(),
+    user_data: pref,
+    };
+    my_config.save_config(&my_abserde);
+            
+}
+// fn bnc()->(String,String){
+
+// }
+fn reinit(my_abserde:&Abserde){
+    
+    
+    // my_abserde.delete().expect("");    
+    let mut pref = IndexMap::<String,String>::new();
+    let mut browsers;
+    let browsers_names;
+    // let mut browsers = ["V:\\Firefox\\firefox.exe","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
+    #[cfg(not(target_os = "macos"))]{
+        browsers = ["firefox","firefox","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
+        browsers_names = ["firefox private window","firefox","chromium","waterfox","vivaldi stable","firefox dev","firefox beta"];
+    }
+    #[cfg(target_os = "macos")]{
+        browsers = ["open -a Firefox --args --private-window","open -a Firefox --args","open -a Safari --args"];
+        browsers_names = ["firefox private","firefox","safari"];
+    }
+    // #[cfg(not(target_os = "linux"))]{
+
+    // }
+    // setup();
+    let mut i=0;
+    for br in browsers{
+        pref.insert(browsers_names.get(i).unwrap().to_string().into(), br.to_string());
+        i+=1;
+    }
+    
+    let mut my_config = MyConfig {
+        shortenusing: "https://unshorten.me/s/".to_string(),
+    // 	window_width: 90,
+    // window_height: 45,
+    // window_x: 45,
+    // window_y: 45,
+    // theme: "".to_string(),
+    user_data: pref,
+    };
+    my_config.save_config(&my_abserde);
+            
+}
+    fn setup(my_abserde:&Abserde) -> (IndexMap<String,String>,String) {
+        
         
         // my_abserde.delete().expect("");    
         let mut pref = IndexMap::<String,String>::new();
-        let browsers_names = ["firefox","chromium","waterfox","vivaldi stable","firefox dev","firefox beta"];
-        // let mut browsers = ["V:\\Firefox\\firefox.exe","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
-        let mut browsers = ["firefox","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
+        let mut browsers;
+    let browsers_names;
+    // let mut browsers = ["V:\\Firefox\\firefox.exe","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
+    #[cfg(not(target_os = "macos"))]{
+        browsers = ["firefox --private-window","firefox","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
+        browsers_names = ["firefox private window","firefox","chromium","waterfox","vivaldi stable","firefox dev","firefox beta"];
+    }
+    #[cfg(target_os = "macos")]{
+        browsers = ["open -a Firefox --args --private-window","open -a Firefox --args","open -a Safari --args"];
+        browsers_names = ["firefox private","firefox","safari"];
+    }
         // setup();
         let mut i=0;
         for br in browsers{
@@ -103,7 +190,7 @@ struct MyConfig {
         // }
         // my_abserde.delete().expect("");
         
-        match MyConfig::load_config(&my_abserde){
+        match MyConfig::load_config(my_abserde){
                   Ok(map) => {
                     // my_config = MyConfig::load_config(&my_abserde).expect("");
                     // println!("{:#?}", dirs::config_dir());
@@ -130,14 +217,14 @@ struct MyConfig {
                   }
                 }
                 if(needload){
-                    my_config.save_config(&my_abserde);
+                    my_config.save_config(my_abserde);
                 }
                 // if(issue){
                 //     HashMap::<String,String>::new()
                 // }
                 // else
                 {
-                    (MyConfig::load_config(&my_abserde).expect("").user_data,MyConfig::load_config(&my_abserde).expect("").shortenusing)
+                    (MyConfig::load_config(my_abserde).expect("").user_data,MyConfig::load_config(&my_abserde).expect("").shortenusing)
                 }
                 
                 
@@ -238,7 +325,45 @@ pub fn link_finder_str(input: &str) -> Vec<String> {
     links_str
 }
 fn main() {
+    app_center::start!("522f2740-e466-4804-9e8e-8d975869d4dd");
+    let my_abserde = Abserde {
+        app: appname.to_string(),
+        location: Location::Auto,
+        format: Format::Toml,
+    };
+    let args: Vec<String> = env::args().collect();
+    match args.get(1) {
+        
+        Some(val) => match val {
+            val => {
+                println!("{}----------->",val);
 
+                if val == "reinit"{
+                    println!("Reinitilizing config file.");
+                    reinit(&my_abserde);
+                    process::exit(0);
+
+                }if val == "add"{
+                    println!("Added new browser.");
+                    appendfile(&my_abserde,args.get(2).unwrap().to_string(),args.get(3).unwrap().to_string());
+                    process::exit(0);
+
+                }if val == "clear"{
+                    println!("Cleared browser list.");
+                    clear(&my_abserde);
+                    process::exit(0);
+
+                }
+            }
+            _ =>{
+                
+            },
+            // Message::Stop => rlist(),
+        },
+        None => {
+            
+        },
+    }
     // Create a new preferences key-value map
     // (Under the hood: HashMap<String, String>)
     // let mut faves: PreferencesMap<String> = PreferencesMap::new();
@@ -390,6 +515,16 @@ let (s, r) = fltk::app::channel();
                 WIDGET_WIDTH - 40,
                 WIDGET_HEIGHT - 40,"");
                 win.resizable(&vpack);
+                // let mut url = Input::new(100,25,300,25, "Enter URL");
+                // url.set_trigger(CallbackTrigger::Changed);
+                // let mut uc=false;
+                // url.set_callback(move |input_c: &mut Input| {
+                //         ourl=input_c.value();
+                //         println!("thevalis----->{}",ourl);
+                //         uc=true;
+                //     });
+                    
+                // url.emit(s.clone(),"frominput".to_string());
             // let mut tbpack=fltk::group::Pack::default().with_size(250,60).center_of(&win);    
                 let mut framet = fltk::frame::Frame::default()
                 .with_size(800,60)
@@ -478,19 +613,35 @@ let (s, r) = fltk::app::channel();
                         }
                     }
                     let mut clipboard = Clipboard::new().unwrap();
-                    for kj in link_finder_str(&clipboard.get_text().unwrap()){
-                        let ss: String = kj.chars().skip(0).take(40).collect();
-                        let mut b = Button::default()
-                            .with_size(70, 20)
-                            .with_label(&ss);
-                        b.emit(s.clone(),kj.to_string());
-                        b.set_tooltip(&kj);
-                        b.set_down_frame(FrameType::FlatBox);
-                        b.set_selection_color(Color::color_average(b.color(), Color::Foreground, 0.9));
-                        b.clear_visible_focus();
-                        b.set_frame(FrameType::FlatBox);
-                    println!("{}",kj);
-                    }                   
+                    match clipboard.get_text() {
+                    Ok(sk) => { 
+                        for kj in link_finder_str(&sk){
+                            let ss: String = kj.chars().skip(0).take(40).collect();
+                            let mut b = Button::default()
+                                .with_size(70, 20)
+                                .with_label(&ss);
+                            b.emit(s.clone(),kj.to_string());
+                            b.set_tooltip(&kj);
+                            b.set_down_frame(FrameType::FlatBox);
+                            b.set_selection_color(Color::color_average(b.color(), Color::Foreground, 0.9));
+                            b.clear_visible_focus();
+                            b.set_frame(FrameType::FlatBox);
+                        println!("{}",kj);
+                        }
+                        
+                        // fltk::dialog::message(90, 90, &sk);{
+                            // let mut res = std::process::Command::new(format!("/home/roger/Downloads/waterfox/waterfox {}",sk)).output();
+                        // }
+                        
+                        // ... use sk ...
+                    },
+                    Err(e) => {
+                        println!("Error Clipboard");
+                        // setframe(&mut framet,"Error");
+                        // ... sk is not available, and e explains why ...
+                    },
+                }
+                                       
                 }
                     
             ,
@@ -636,6 +787,7 @@ let (s, r) = fltk::app::channel();
                 10,
                 40) ;
                 fltk::frame::Frame::default().with_size(20, 30);
+            
             let mut eub = Button::default().with_size(150,30);
             eub.set_label("expand url");
             eub.emit(s.clone(),"expandurl".to_string());
@@ -699,6 +851,36 @@ let (s, r) = fltk::app::channel();
 
             ttb.end();
             ttb.set_type(fltk::group::PackType::Horizontal);
+            fltk::frame::Frame::default().with_size(10, 10);
+            let mut ttb=fltk::group::Pack::default().with_size(
+                10,
+                40) ;
+                
+                
+                fltk::frame::Frame::default().with_size(20, 30);
+            
+                let mut svw = Button::default().with_size(150,30);
+                svw.set_label("share via web");
+                svw.emit(s.clone(),"svw".to_string());
+                
+            // b1.emit(s, "refresh".to_string());
+            // let mut hpack=hpack.clone();
+            // eub.handle(move|b, ev| match ev {
+            //     fltk::enums::Event::Push => {
+            //         // frame.set_label(&"Expanding URL, Please wait!".to_string());
+            //         true
+            //     },
+            //     _ => false,
+            // });
+            fltk::frame::Frame::default().with_size(20, 10);
+            // let mut bframe1 = fltk::frame::Frame::default().with_size(300, 60);
+            let mut svc = Button::default().with_size(150,30);
+                svc.set_label("copy to clipboard");
+                svc.emit(s.clone(),"svc".to_string());
+    
+
+            ttb.end();
+            ttb.set_type(fltk::group::PackType::Horizontal);
             fltk::frame::Frame::default().with_size(20, 30);
             let mut hpack=fltk::group::Pack::default().with_size(250,40) .center_of(&win);
                 // let i=0;
@@ -706,11 +888,16 @@ let (s, r) = fltk::app::channel();
                 // browsers=browsers.clone();
                 let mut i=0;
                 // let mut bl:PreferencesMap<String> = setup();
-                let(hmap,su)=setup();
+                let(hmap,su)=setup(&my_abserde);
                 for (k,v) in hmap {
                     let expandedurl=expandedurl.clone();
                     fltk::frame::Frame::default().with_size(20, 10);
+                    let k: String = k.chars().skip(0).take(10).collect();
+                    // let cc = k.chars().count();
+                    // let sz=cc*9;
+                    // let mut b1 = Button::default().with_size(sz.try_into().unwrap(),60);
                     let mut b1 = Button::default().with_size(90,60);
+                    
                     b1.set_label(&format!("{}",k));
                     b1.emit(s.clone(),v);
                     // b1.emit(s, "refresh".to_string());
@@ -779,9 +966,12 @@ let (s, r) = fltk::app::channel();
                 // frame=frame.clone();
                 match r.recv() {
                     
-                    Some(val) => match val {
+                    Some(val) => 
+                    match val {
                         val => {
-                            
+                            // if(val == "frominput"){
+                            //             ourl=url.value();
+                            //     }
                             // let mut str=val;
                             if(val.contains("//")){
                                 // let k= format!("{}",val);
@@ -799,7 +989,7 @@ let (s, r) = fltk::app::channel();
                             true;
                             }
                             else if val == "expandurl"{
-                                match eurl(ourl.clone()) {
+                                match eurl(&my_abserde,ourl.clone()) {
                                     Ok(sk) => { 
                                         if(sk.to_lowercase().contains("invalid")){
                                             setframe(&mut framet,args.get(1).unwrap());
@@ -823,14 +1013,37 @@ let (s, r) = fltk::app::channel();
                             }
                             else if(val == "all"){
                                 println!("all------------->");
-                                let(hmap,su)=setup();
+                                // if ourl==" "{
+                                //     ourl=url.value(); 
+                                //  }
+                                 
+                                let(hmap,su)=setup(&my_abserde);
                                 for (k,v) in hmap{
                                     open(&v,&ourl);
                                 }
                                 true;
                             }
+                            else if(val == "svc"){
+                                let mut clipboard = Clipboard::new().unwrap();
+                                println!("{}",&ourl);
+                                #[cfg(target_os = "linux")]{
+                                    clipboard.set().wait().text(&ourl).unwrap();
+                                }
+                                #[cfg(not(target_os = "linux"))]{
+                                    clipboard.set_text(&ourl).unwrap();
+                                }
+                                // clipboard.set_text("abc".to_string()).unwrap();
+                                println!("{}",clipboard.get_text().unwrap());
+                            }else if(val == "svw"){
+                                // ada
+                            }
+                            // else 
                             else{
-                                println!("expand?------------->");
+                                // if ourl==" "{
+                                //     ourl=url.value(); 
+                                //  }
+                                 
+                                println!("{}------------->r{}r",val,expandedurl);
                                 
                                 open(&val,&expandedurl);
                                                 println!("oepning----->{}",expandedurl);
@@ -853,17 +1066,70 @@ let (s, r) = fltk::app::channel();
             // app.run().unwrap();    
             
 }
+#[cfg(target_os = "linux")]
+use arboard::SetExtLinux;
+const DAEMONIZE_ARG: &str = "__internal_daemonize";
+// fn sendtoclip(msg:&String) -> Result<()> {
+// 	#[cfg(target_os = "linux")]
+// 	if env::args().nth(1).as_deref() == Some(DAEMONIZE_ARG) {
+// 		Clipboard::new()?.set().wait().text(msg)?;
+// 		return Ok(());
+// 	}
+
+// 	// SimpleLogger::new().init().unwrap();
+
+// 	if cfg!(target_os = "linux") {
+// 		process::Command::new(env::current_exe()?)
+// 			.arg(DAEMONIZE_ARG)
+// 			.stdin(process::Stdio::null())
+// 			.stdout(process::Stdio::null())
+// 			.stderr(process::Stdio::null())
+// 			.current_dir("/")
+// 			.spawn()?;
+// 	} else {
+// 		Clipboard::new()?.set_text("Hello, world!")?;
+// 	}
+
+// 	Ok(())
+// }
 fn setframe(f:&mut Frame,s: &str){
     let ss: String = s.chars().skip(0).take(40).collect();
     f.set_label(&ss);
 }
 fn open(v: &String,ourl: &String){
-    // let mut res = Command::new(format!("{}",v))
-    //                                                 .arg(format!("{}",ourl))
-    //                                                 .output();
+    // #[cfg(target_os = "linux")]
+    // #[cfg(target_os = "windows")]
+    { 
+    println!("test--->{}",ourl);
+    println!("browser--->{}",v);
+    
+    let strings:Vec<String> = v.split_whitespace().map(str::to_string).collect();
+    let mut res = Command::new(format!("{}",strings[0]));
+    let slice = &strings[1..strings.len()];
 
-    let mut command = command(format!("{} {}",v,ourl));
-                command.stdout(Stdio::piped());
-        let output = command.execute_output().unwrap();
-        println!("{}", String::from_utf8(output.stdout).unwrap());
+    for k in slice{ 
+        res.arg(k);
+    }
+
+    res.arg(format!("{}",ourl))
+    .spawn();
+        // #[cfg(target_os = "linux")]
+    }
+    // #[cfg(target_os = "macos")]{
+    //     let mut res =  Command::new("open");
+    //     let strings:Vec<String> = v.split_whitespace().map(str::to_string).collect();
+    //     res.arg("-a");
+    //     for k in strings{ 
+    //         res.arg(k);
+    //     }
+    //     res.arg(&ourl).spawn();
+    // }
+    // expandedurl=url.value();
+   
+    process::exit(0);
+
+    // let mut command = command(format!("{} {}",v,ourl));
+    //             command.stdout(Stdio::piped());
+    //     let output = command.execute_output().unwrap();
+    //     println!("{}", String::from_utf8(output.stdout).unwrap());
 }

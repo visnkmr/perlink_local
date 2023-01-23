@@ -1,0 +1,59 @@
+{
+  "version": 0,
+  "root_name": "perlink",
+  "workspace_crates": {
+    "perlink": {
+      "full_path": "/home/roger/Downloads/rust/browser(formerly_perlink)/Cargo.toml",
+      "dependencies": {
+        "arboard": {
+          "original_features": [
+            "image-data"
+          ],
+          "successfully_removed_features": [
+            "image-data"
+          ],
+          "unsuccessfully_removed_features": []
+        },
+        "serde": {
+          "original_features": [
+            "derive",
+            "serde_derive",
+            "std"
+          ],
+          "successfully_removed_features": [
+            "derive",
+            "std",
+            "serde_derive"
+          ],
+          "unsuccessfully_removed_features": []
+        },
+        "isahc": {
+          "original_features": [
+            "static-curl",
+            "http2",
+            "text-decoding"
+          ],
+          "successfully_removed_features": [
+            "http2",
+            "static-curl"
+          ],
+          "unsuccessfully_removed_features": [
+            "text-decoding"
+          ]
+        },
+        "abserde": {
+          "original_features": [
+            "json",
+            "toml"
+          ],
+          "successfully_removed_features": [
+            "json"
+          ],
+          "unsuccessfully_removed_features": [
+            "toml"
+          ]
+        }
+      }
+    }
+  }
+}
