@@ -27,16 +27,19 @@ use std::process::{Command,Stdio};
 use isahc::prelude::*;
 // extern crate preferences;
 use std::collections::HashMap;
-use abserde::*;
+// use abserde::*;
 
 use std::fs::create_dir_all;
 // const APP_INFO: AppInfo = AppInfo{name: "Perlink", author: "visnk"};
 const appname: &str = "perlink";
-fn eurl(my_abserde:&Abserde,t: String) -> Result<String> {
+fn eurl(t: String) -> Result<String,()> {
     // return Ok("try".to_string());
     println!("get {} val----->{}","expanding",t);
-    let(hmap,su)=setup(my_abserde);
-    let mut response = isahc::get(format!("{}{}",su,t).as_str())?;
+    let mut response = isahc::get(
+        format!("{}{}",prefstore::getcustom(appname, "website.su", "https://unshorten.me/s/".to_string()),t).as_str()
+    ).map_err(|op|{
+        eprintln!("Could not get expanded url. error:{}",op)
+    }).unwrap();
     // println!("get {} val----->{}","expanded url",response.text()?);
 
     // Print some basic info about the response to standard output.
@@ -45,7 +48,7 @@ fn eurl(my_abserde:&Abserde,t: String) -> Result<String> {
 
     // Read the response body as text into a string and print it.
    
-    return Ok(response.text()?);
+    return Ok(response.text().unwrap());
 }
 #[derive(Serialize, Deserialize, Default, Debug)]
 struct MyConfig {
@@ -68,56 +71,12 @@ struct MyConfig {
 // const Notimes: &str = "ntimes";
 // const Isenb: &str = "isenb";
 // const PREFERENCES_KEY: &str = "prefs";
-fn appendfile(my_abserde:&Abserde,browsername:String,browsercommand:String){
-    let mut blist=IndexMap::new() ;
-    let mut sb:String=String::new();
-                match MyConfig::load_config(my_abserde){
-                    Ok(map) => {
-                    //   pref=map.bookmarklist;
-                      blist=map.user_data;
-                      sb=map.shortenusing;
-                    //   users=map.users;
-                    }
-                    Err(e) => {
-                      
-                    }
-                  }
-                blist.insert(browsername, browsercommand);
-               
-                let my_config = MyConfig {
-                    user_data: blist,
-                    shortenusing:sb,
-                };
-                println!("reloading");
-                my_config.save_config(&my_abserde);
-}
-fn clear(my_abserde:&Abserde){
-    
-    
+fn appendfile(browsername:String,browsercommand:String){
+    prefstore::savepreference(appname, browsername,browsercommand);
+    }
+fn reinit(){
     // my_abserde.delete().expect("");    
-    let mut pref = IndexMap::<String,String>::new();
-    
-    
-    let mut my_config = MyConfig {
-        shortenusing: "https://unshorten.me/s/".to_string(),
-    // 	window_width: 90,
-    // window_height: 45,
-    // window_x: 45,
-    // window_y: 45,
-    // theme: "".to_string(),
-    user_data: pref,
-    };
-    my_config.save_config(&my_abserde);
-            
-}
-// fn bnc()->(String,String){
-
-// }
-fn reinit(my_abserde:&Abserde){
-    
-    
-    // my_abserde.delete().expect("");    
-    let mut pref = IndexMap::<String,String>::new();
+    // let mut pref = IndexMap::<String,String>::new();
     let mut browsers;
     let browsers_names;
     // let mut browsers = ["V:\\Firefox\\firefox.exe","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
@@ -135,183 +94,13 @@ fn reinit(my_abserde:&Abserde){
     // setup();
     let mut i=0;
     for br in browsers{
-        pref.insert(browsers_names.get(i).unwrap().to_string().into(), br.to_string());
+        prefstore::savepreference(appname, br,browsers_names.get(i).unwrap().to_string());
         i+=1;
     }
-    
-    let mut my_config = MyConfig {
-        shortenusing: "https://unshorten.me/s/".to_string(),
-    // 	window_width: 90,
-    // window_height: 45,
-    // window_x: 45,
-    // window_y: 45,
-    // theme: "".to_string(),
-    user_data: pref,
-    };
-    my_config.save_config(&my_abserde);
+    prefstore::savecustom(appname,"website.su", "https://unshorten.me/s/".to_string());
             
 }
-    fn setup(my_abserde:&Abserde) -> (IndexMap<String,String>,String) {
-        
-        
-        // my_abserde.delete().expect("");    
-        let mut pref = IndexMap::<String,String>::new();
-        let mut browsers;
-    let browsers_names;
-    // let mut browsers = ["V:\\Firefox\\firefox.exe","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
-    #[cfg(not(target_os = "macos"))]{
-        browsers = ["firefox --private-window","firefox","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
-        browsers_names = ["firefox private window","firefox","chromium","waterfox","vivaldi stable","firefox dev","firefox beta"];
-    }
-    #[cfg(target_os = "macos")]{
-        browsers = ["open -a Firefox --args --private-window","open -a Firefox --args","open -a Safari --args"];
-        browsers_names = ["firefox private","firefox","safari"];
-    }
-        // setup();
-        let mut i=0;
-        for br in browsers{
-            pref.insert(browsers_names.get(i).unwrap().to_string().into(), br.to_string());
-            i+=1;
-        }
-        
-        let mut my_config = MyConfig {
-            shortenusing: "https://unshorten.me/s/".to_string(),
-        // 	window_width: 90,
-        // window_height: 45,
-        // window_x: 45,
-        // window_y: 45,
-        // theme: "".to_string(),
-        user_data: pref,
-        };
-        let mut needload = false;
-        let mut issue = false;
-        // if MyConfig::load_config(&my_abserde).expect("").user_data.is_empty(){
-        // 	
-        // }
-        // my_abserde.delete().expect("");
-        
-        match MyConfig::load_config(my_abserde){
-                  Ok(map) => {
-                    // my_config = MyConfig::load_config(&my_abserde).expect("");
-                    // println!("{:#?}", dirs::config_dir());
-                    // println!("{:#?}",my_abserde.config_path());
-                    
-                    if(map.user_data.is_empty()){
-                        needload=true;
-                        println!("is empty");
-                    }
-                    else{
-                        needload=false;
-                        println!("not empty");
-                    }
-                    println!("{:#?}", map.user_data);
-    
-                    // Ok(my_abserde.delete()?)
-                  }
-                  Err(e) => {
-                    needload=true;
-                    issue=true;
-                    // warn!("Error while loading preferences: {:?}", e);
-                    println!("is empty.Error.");
-                    
-                  }
-                }
-                if(needload){
-                    my_config.save_config(my_abserde);
-                }
-                // if(issue){
-                //     HashMap::<String,String>::new()
-                // }
-                // else
-                {
-                    (MyConfig::load_config(my_abserde).expect("").user_data,MyConfig::load_config(&my_abserde).expect("").shortenusing)
-                }
-                
-                
-    }
 
-// pub fn set_token(what: String,token: String) {
-//     // Create a new preferences key-value map
-//     // (Under the hood: HashMap<String, String>)
-//     println!("setval {}---->{}",what,token);
-//     let mut faves: PreferencesMap<String> = PreferencesMap::new();
-  
-//     // Edit the preferences (std::collections::HashMap)
-//     faves.insert(what, token);
-    
-  
-//     // Store the user's preferences
-//     let save_result = faves.save(&APP_INFO, PREFERENCES_KEY);
-//     assert!(save_result.is_ok());
-//   }
-
-
-// pub fn get_token(what: String) -> Option<String> {
-//     match PreferencesMap::<String>::load(&APP_INFO, &PREFERENCES_KEY) {
-//       Ok(map) => {
-//         if let Some(token) = map.get(&what) {
-//             println!("get {} val----->{}",what,token);
-//           Some(String::from(token))
-//         } else {
-//             println!("get {} val----->firefox",what);
-//             Some(String::from("firefox")) //None
-//         }
-//       }
-//       Err(e) => {
-//         // warn!("Error while loading preferences: {:?}", e);
-//         None
-//       }
-//     }
-//   }
-
-// pub enum ConfigItem {
-//     DatabaseUser,
-//     DatabasePassword,
-//     Custom(String),
-// }
-// impl ConfigItem {
-//     fn as_key(self) -> String {
-//         match self {
-//             ConfigItem::DatabaseUser => String::from("db_user"),
-//             ConfigItem::DatabasePassword => String::from("db_password"),
-//             ConfigItem::Custom(s) => s,
-//         }
-//     }
-// }
-// fn set_to_default(pref: &mut HashMap<String,String>) {
-//     println!("creating new.");
-//     let browsers_names = ["firefox","chromium","waterfox","vivaldi stable","firefox dev","firefox beta"];
-//     let mut browsers = ["firefox","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
-//     // setup();
-//     let mut i=0;
-//     for br in browsers{
-//         pref.insert(browsers_names.get(i).unwrap().to_string().into(), br.to_string());
-//         i+=1;
-//     }
-//     // pref.insert("test".into(), String::from("root"));
-//     // pref.insert("try".into(), String::from("pw"));
-// }
-// fn setup() -> Hashmap<String,String> {
-//     // let mut path = preferences::prefs_base_dir().expect("No base dir for config files")
-//     //     .join(APP_INFO.name)
-//     //     .join(PREFERENCES_KEY);
-//     // path.set_extension("prefs.json");
-
-//     if !path.exists() {
-//         println!("no path found.");
-//         match path.parent() {
-//             Some(parent) => { create_dir_all(parent).expect("Could not create config file parent directories") }
-//             None => {},
-//         };
-
-//         let mut pref = PreferencesMap::<String>::new();
-//         set_to_default(&mut pref);
-//         pref.save(&APP_INFO, PREFERENCES_KEY).expect("Could not save config file");
-
-//         // info!("Configuration file created: {}", path.into_os_string().into_string().unwrap());
-//     }
-
-//     PreferencesMap::<String>::load(&APP_INFO, PREFERENCES_KEY).expect("Could not load config file")
 // }
 pub fn link_finder_str(input: &str) -> Vec<String> {
     let mut links_str = Vec::new();
@@ -325,12 +114,19 @@ pub fn link_finder_str(input: &str) -> Vec<String> {
     links_str
 }
 fn main() {
-    app_center::start!("522f2740-e466-4804-9e8e-8d975869d4dd");
-    let my_abserde = Abserde {
-        app: appname.to_string(),
-        location: Location::Auto,
-        format: Format::Toml,
-    };
+    // app_center::start!("522f2740-e466-4804-9e8e-8d975869d4dd");
+    human_panic::setup_panic!(human_panic::Metadata {
+        version: env!("CARGO_PKG_VERSION").into(),
+        name: env!("CARGO_PKG_NAME").into(),
+        authors: env!("CARGO_PKG_AUTHORS").replace(":", ", ").into(),
+        homepage: env!("CARGO_PKG_HOMEPAGE").into(),
+        path_to_save_log_to: prefstore::prefstore_directory(&appname.to_string()).unwrap(),
+    });
+    // let my_abserde = Abserde {
+    //     app: appname.to_string(),
+    //     location: Location::Auto,
+    //     format: Format::Toml,
+    // };
     let args: Vec<String> = env::args().collect();
     match args.get(1) {
         
@@ -340,17 +136,17 @@ fn main() {
 
                 if val == "reinit"{
                     println!("Reinitilizing config file.");
-                    reinit(&my_abserde);
+                    reinit();
                     process::exit(0);
 
                 }if val == "add"{
                     println!("Added new browser.");
-                    appendfile(&my_abserde,args.get(2).unwrap().to_string(),args.get(3).unwrap().to_string());
+                    appendfile(args.get(2).unwrap().to_string(),args.get(3).unwrap().to_string());
                     process::exit(0);
 
                 }if val == "clear"{
                     println!("Cleared browser list.");
-                    clear(&my_abserde);
+                    prefstore::clearall(appname,"txt");
                     process::exit(0);
 
                 }
@@ -888,8 +684,11 @@ let (s, r) = fltk::app::channel();
                 // browsers=browsers.clone();
                 let mut i=0;
                 // let mut bl:PreferencesMap<String> = setup();
-                let(hmap,su)=setup(&my_abserde);
-                for (k,v) in hmap {
+                if(prefstore::getall(appname).is_empty()){
+                    reinit();
+                }
+                
+                for (k,v) in prefstore::getall(appname) {
                     let expandedurl=expandedurl.clone();
                     fltk::frame::Frame::default().with_size(20, 10);
                     let k: String = k.chars().skip(0).take(10).collect();
@@ -989,7 +788,7 @@ let (s, r) = fltk::app::channel();
                             true;
                             }
                             else if val == "expandurl"{
-                                match eurl(&my_abserde,ourl.clone()) {
+                                match eurl(ourl.clone()) {
                                     Ok(sk) => { 
                                         if(sk.to_lowercase().contains("invalid")){
                                             setframe(&mut framet,args.get(1).unwrap());
@@ -1016,9 +815,11 @@ let (s, r) = fltk::app::channel();
                                 // if ourl==" "{
                                 //     ourl=url.value(); 
                                 //  }
-                                 
-                                let(hmap,su)=setup(&my_abserde);
-                                for (k,v) in hmap{
+                                if(prefstore::getall(appname).is_empty()){
+                                    reinit();
+                                }
+                                let(hmap)=prefstore::getall(appname);
+                                for (_,v) in hmap{
                                     open(&v,&ourl);
                                 }
                                 true;
@@ -1111,8 +912,10 @@ fn open(v: &String,ourl: &String){
         res.arg(k);
     }
 
-    res.arg(format!("{}",ourl))
+    let tte=res.arg(format!("{}",ourl))
     .spawn();
+    println!("{:?}",tte);
+
         // #[cfg(target_os = "linux")]
     }
     // #[cfg(target_os = "macos")]{
