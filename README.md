@@ -12,7 +12,7 @@ Tested to work on
   
   Features include 
   1. Open a link in all browsers at once,  
-  2. expand a shortened URL before browsing it using any service of your choice, configurable in the config file mentioned below.  
+  2. expand a shortened URL before browsing it using any service of your choice, configurable in the config folder mentioned below.  
   3. You can also Copy url to clipboard and open the app to select browser to open the url in. 
   4. You can use an extension in your browser to show url in window title and then open the app to select browser to open any of the open window url in.
   
@@ -30,26 +30,15 @@ All browsers are opened using shell commands.
 |Firefox beta|firefox-beta|
 |Firefox dev|firefox-dev|
 
-Config file now stored @ 
+Config files now stored @ 
 ```
-Linux: /home/<username>/.config/perlink/config.toml  
-Windows: Drive:\Users\username\AppData\Roaming\perlink\config.toml
+Linux: /home/<username>/.config/perlink/
+Windows: Drive:\Users\username\AppData\Roaming\perlink\
 ```  
   
 Modifying the config file will reflect in the window options.  
 Allowing you to pratically add to perlink any browser/software that can be launched via command line.
-the contents of the config file are in the format 
-```
-"name of button":"command to execute (should not have any arguments)"
-```
-
-In order add a button for your already installed browser just open config file and append this to config file before }}
-```
-Linux: "browsername":"/path/to/your/browser/executable"
-Windows: "browsername":"Drive:/path/to/your/browser/executable"
-```
-You can check the [sample config](https://github.com/visnkmr/perlink/blob/main/sample-config.json) for a working implementation.
-  
+the contents of the config folder are browsername.txt that contains the command to run to open a browser.  
   
 ## Can be used:  
 1. by Web developer to open website in all browsers with one click.  
