@@ -1,5 +1,5 @@
 #![windows_subsystem = "windows"]
-
+#[allow(warnings)]
 use std::{env,rc, process::{self, ExitCode}};
 use window_titles::{Connection, ConnectionTrait};
 use arboard::Clipboard;
@@ -913,8 +913,9 @@ fn open(v: &String,ourl: &String){
     }
 
     let tte=res.arg(format!("{}",ourl))
-    .spawn();
-    println!("{:?}",tte);
+                        .spawn()
+                        .expect("failed to execute process");
+    eprintln!("{:?}",tte);
 
         // #[cfg(target_os = "linux")]
     }
