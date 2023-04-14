@@ -15,7 +15,8 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install cmake libxft-dev 
+        sudo apt-get install cmake pkg-config libfreetype6-dev libfontconfig1-dev \
+            libxcb-xfixes0-dev libxkbcommon-dev python3
     - uses: actions/checkout@v2
     - name: Install Rust
       uses: actions-rs/toolchain@v1
@@ -25,9 +26,7 @@ jobs:
     - name: Build
       env:
           RUST_BACKTRACE: 1
-      run: |
-        export RUSTFLAGS="-Awarnings"
-        cargo build --release
+      run: cargo build --release
     - name: Compress binary
       run: upx --best --lzma perlink
     - name: Release
