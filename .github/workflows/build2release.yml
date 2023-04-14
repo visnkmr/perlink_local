@@ -25,7 +25,9 @@ jobs:
     - name: Build
       env:
           RUST_BACKTRACE: 1
-      run: cargo build --release
+      run: |
+        export RUSTFLAGS="-Awarnings"
+        cargo build --release
     - name: Compress binary
       run: upx --best --lzma perlink
     - name: Release
