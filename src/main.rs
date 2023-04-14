@@ -144,7 +144,8 @@ fn main() {
                     appendfile(args.get(2).unwrap().to_string(),args.get(3).unwrap().to_string());
                     process::exit(0);
 
-                }if val == "clear"{
+                }
+                if val == "clear"{
                     println!("Cleared browser list.");
                     prefstore::clearall(appname,"txt");
                     process::exit(0);
