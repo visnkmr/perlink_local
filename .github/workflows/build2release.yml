@@ -15,8 +15,8 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install cmake libxft-dev libxkbcommon-dev \
-        libfreetype6-dev libfontconfig1-dev libxkbcommon-dev python3
+        sudo apt-get install cmake libxft-dev libxinerama-dev libxcursor-dev  \
+        libxfixes-dev libpango1.0-dev libpangoxft-1.0-0 libpangocairo-1.0-0
     - uses: actions/checkout@v2
     - name: Install Rust
       uses: actions-rs/toolchain@v1
