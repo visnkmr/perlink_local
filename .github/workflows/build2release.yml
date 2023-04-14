@@ -28,7 +28,8 @@ jobs:
           RUST_BACKTRACE: 1
       run: cargo build --release
     - name: Compress binary
-      run: upx --best --lzma perlink
+      run: upx --best --lzma target/release/perlink
+      continue-on-error: true
     - name: Release
       uses: softprops/action-gh-release@v1
       with:
