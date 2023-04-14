@@ -18,6 +18,7 @@ jobs:
         sudo apt-get install cmake libxft-dev libxinerama-dev libxcursor-dev  \
         libxfixes-dev libpango1.0-dev libpangoxft-1.0-0 libpangocairo-1.0-0
     - uses: actions/checkout@v2
+    - uses: Swatinem/rust-cache@v2.2.1
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -33,6 +34,12 @@ jobs:
     - name: Release
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: ${{ github.sha }}
+        name: ${{ github.event.head_commit.message }}
+        draft: true
         files: |
           target/release/perlink
+        body: |
+          - ${{ github.event.head_commit.message }} ${{ github.sha }}
+        generate_release_notes: true
         token: ${{ secrets.GITHUB_TOKEN }}
