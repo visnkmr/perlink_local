@@ -16,15 +16,11 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install cmake libxft-dev libxinerama-dev libxcursor-dev  \
-        libxfixes-dev libpango1.0-dev libpangoxft-1.0-0 libpangocairo-1.0-0
+        libxfixes-dev libpango1.0-dev libpangoxft-1.0-0 libpangocairo-1.0-0 libssl-dev
     - uses: actions/checkout@v2
     - uses: Swatinem/rust-cache@v2.2.1
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        cache-on-failure: true
+      uses: dtolnay/rust-toolchain@stable
     - name: Build
       env:
         RUST_BACKTRACE: 1
