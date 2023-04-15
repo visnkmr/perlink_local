@@ -34,18 +34,18 @@ jobs:
       continue-on-error: true
     - name: Get current date
       id: date
-      run: echo "::set-output name=date::$(date +'%Y-%m-%d_%H:%M')"
+      run: echo "::set-output name=date::$(date +'%Y_%m_%dT%H_%M')"
     - name: Release
       uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         CACHE_ON_FAILURE: true
       with:
-        tag_name: ${{ github.event.repository.updated_at}}
+        tag_name: ${{ steps.date.outputs.date }}
         name: ${{ github.event.head_commit.message }}
         draft: true
         files: |
           target/release/perlink
         body: |
-          - ${{ github.event.head_commit.message }} ${{ github.sha }} ${{ steps.date.outputs.date }}
+          - ${{ github.event.head_commit.message }} ${{ github.sha }} 
         generate_release_notes: true
