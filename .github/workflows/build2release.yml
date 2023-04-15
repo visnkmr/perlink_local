@@ -29,7 +29,7 @@ jobs:
       - name: Install deps
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: |
-        sudo apt-get install -y musl-tools cmake libxft-dev libxinerama-dev libxcursor-dev libxfixes-dev libpango1.0-dev libpangoxft-1.0-0 libpangocairo-1.0-0
+        sudo apt-get install musl-tools cmake libxft-dev libxinerama-dev libxcursor-dev libxfixes-dev libpango1.0-dev libpangoxft-1.0-0 libpangocairo-1.0-0
       - name: Checkout
         uses: actions/checkout@v3
       - run: cargo fetch --target ${{ matrix.target }}
