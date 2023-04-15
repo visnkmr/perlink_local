@@ -26,20 +26,25 @@ jobs:
         toolchain: stable
     - name: Build
       env:
-          RUST_BACKTRACE: 1
+        RUST_BACKTRACE: 1
       run: cargo build --release
     - name: Compress binary
       run: upx --best --lzma target/release/perlink
       continue-on-error: true
+    - name: Get current date
+      id: date
+      run: echo "::set-output name=date::$(date +'%Y-%m-%d_%H:%M')"
     - name: Release
       uses: softprops/action-gh-release@v1
+      env:
+        CACHE_ON_FAILURE: true
       with:
-        tag_name: ${{ github.ref }}
+        tag_name: ${{ github.event.repository.updated_at}}
         name: ${{ github.event.head_commit.message }}
         draft: true
         files: |
           target/release/perlink
         body: |
-          - ${{ github.event.head_commit.message }} ${{ github.sha }}
+          - ${{ github.event.head_commit.message }} ${{ github.sha }} ${{ steps.date.outputs.date }}
         generate_release_notes: true
         token: ${{ secrets.GITHUB_TOKEN }}
