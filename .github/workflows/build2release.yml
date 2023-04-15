@@ -42,10 +42,11 @@ jobs:
         CACHE_ON_FAILURE: true
       with:
         tag_name: ${{ steps.date.outputs.date }}
-        name: ${{ github.event.head_commit.message }}
-        draft: true
+        name: ${{ steps.date.outputs.date }}
+        draft: false
+        prerelease: false
         files: |
           target/release/perlink
+        file_name: perlink_amd64_linux
         body: |
-          - ${{ github.event.head_commit.message }} ${{ github.sha }} 
-        generate_release_notes: true
+          - ${{ github.event.head_commit.message }} ${{ github.sha }}
