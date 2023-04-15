@@ -24,6 +24,7 @@ jobs:
       with:
         profile: minimal
         toolchain: stable
+        cache-on-failure: true
     - name: Build
       env:
         RUST_BACKTRACE: 1
@@ -37,6 +38,7 @@ jobs:
     - name: Release
       uses: softprops/action-gh-release@v1
       env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         CACHE_ON_FAILURE: true
       with:
         tag_name: ${{ github.event.repository.updated_at}}
@@ -47,4 +49,3 @@ jobs:
         body: |
           - ${{ github.event.head_commit.message }} ${{ github.sha }} ${{ steps.date.outputs.date }}
         generate_release_notes: true
-        token: ${{ secrets.GITHUB_TOKEN }}
