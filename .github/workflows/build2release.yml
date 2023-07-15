@@ -2,83 +2,47 @@ name: Rust CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ test ]
   pull_request:
     branches: [ main ]
 
 jobs:
-  release:
-    name: Release
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-musl
-          - os: macos-12
-            target: x86_64-apple-darwin
-          - os: macos-12
-            target: aarch64-apple-darwin
-          - os: windows-2022
-            target: x86_64-pc-windows-msvc
-    runs-on: ${{ matrix.os }}
+  build:
+
+    runs-on: ubuntu-latest
+
     steps:
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install deps
-        if: matrix.target == 'x86_64-unknown-linux-musl'
-        run: sudo apt-get install -y musl-tools cmake libxft-dev libxinerama-dev libxcursor-dev libxfixes-dev libpango1.0-dev libpangoxft-1.0-0 libpangocairo-1.0-0 libssl-dev
-      - name: Checkout
-        uses: actions/checkout@v3
-      - run: cargo clean
-      - run: cargo fetch
-      - name: Release build
-        shell: bash
-        run: |
-          cargo build --release
-      - name: Package
-        shell: bash
-        run: |
-          name=perlink
-          tag=amd64
-          target="${{ matrix.target }}"
-          release_name="$name-$tag-$target"
-          mkdir "$release_name"
-
-          if [ "${{ matrix.target }}" != "x86_64-pc-windows-msvc" ]; then
-            strip "target/release/$name"
-          fi
-
-          cp "target/release/$name" "$release_name/"
-      - name: Get current date
-        id: date
-        run: echo "::set-output name=date::$(date +'%Y_%m_%dT%H_%M')"
-      - name: Publish
-        if: matrix.target == 'x86_64-pc-windows-msvc'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.date.outputs.date }}
-          name: ${{ steps.date.outputs.date }}
-          draft: false
-          prerelease: false
-          files: "perlink*"
-          body: |
-            - ${{ github.event.head_commit.message }} ${{ github.sha }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-      - name: Collect artifacts
-        if: matrix.target != 'x86_64-pc-windows-msvc'
-        run: |
-          mkdir -p artifacts
-          mv perlink* artifacts/
-      - name: Publish artifacts
-        if: matrix.target == 'x86_64-pc-windows-msvc'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.date.outputs.date }}
-          name: ${{ steps.date.outputs.date }}
-          draft: false
-          prerelease: false
-          files: "artifacts/*"
-          body: |
-            - ${{ github.event.head_commit.message }} ${{ github.sha }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install cmake libxft-dev libxinerama-dev libxcursor-dev  \
+        libxfixes-dev libpango1.0-dev libpangoxft-1.0-0 libpangocairo-1.0-0 libssl-dev
+    - uses: actions/checkout@v2
+    - uses: Swatinem/rust-cache@v2.2.1
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    - name: Build
+      env:
+        RUST_BACKTRACE: 1
+      run: cargo build --release
+    - name: Compress binary
+      run: upx --best --lzma target/release/perlink
+      continue-on-error: true
+    - name: Get current date
+      id: date
+      run: echo "::set-output name=date::$(date +'%Y_%m_%dT%H_%M')"
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CACHE_ON_FAILURE: true
+      with:
+        tag_name: ${{ steps.date.outputs.date }}
+        name: ${{ steps.date.outputs.date }}
+        draft: false
+        prerelease: false
+        files: |
+          target/release/perlink
+        file_name: perlink_amd64_linux
+        body: |
+          - ${{ github.event.head_commit.message }} ${{ github.sha }}
