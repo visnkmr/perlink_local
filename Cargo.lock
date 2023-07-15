@@ -991,8 +991,8 @@ dependencies = [
 
 [[package]]
 name = "prefstore"
-version = "0.6.0"
-source = "git+https://github.com/visnkmr/prefstore/#5627bcbda913da6ab37a8ebe42e3cea887022aab"
+version = "0.8.0"
+source = "git+https://github.com/visnkmr/prefstore/#ce001108805d7cba4a63839b338ffc6fdd15cf4b"
 dependencies = [
  "dirs",
  "glob",
