@@ -52,6 +52,7 @@ jobs:
         id: date
         run: echo "::set-output name=date::$(date +'%Y_%m_%dT%H_%M')"
       - name: Publish
+        if: matrix.target == 'x86_64-pc-windows-msvc'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.date.outputs.date }}
@@ -59,6 +60,24 @@ jobs:
           draft: false
           prerelease: false
           files: "perlink*"
+          body: |
+            - ${{ github.event.head_commit.message }} ${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      - name: Collect artifacts
+        if: matrix.target != 'x86_64-pc-windows-msvc'
+        run: |
+          mkdir -p artifacts
+          mv perlink* artifacts/
+      - name: Publish artifacts
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.date.outputs.date }}
+          name: ${{ steps.date.outputs.date }}
+          draft: false
+          prerelease: false
+          files: "artifacts/*"
           body: |
             - ${{ github.event.head_commit.message }} ${{ github.sha }}
         env:
