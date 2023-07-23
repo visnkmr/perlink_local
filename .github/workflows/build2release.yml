@@ -8,7 +8,6 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-
     steps:
     - name: Install dependencies
       run: |
@@ -35,7 +34,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         CACHE_ON_FAILURE: true
       with:
-        tag_name: ${{ steps.date.outputs.date }}
+        tag_name: "Perlink linux build based on commit#uses: actions/upload-artifact@v3
+  with: ${{ github.sha }}"
         name: ${{ steps.date.outputs.date }}
         draft: false
         prerelease: false

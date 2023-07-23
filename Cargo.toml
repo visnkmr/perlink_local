@@ -28,6 +28,9 @@ window_titles = { git = "https://github.com/HiruNya/window_titles"}
 linkify = "0.9.0"
 arboard = { default-features = false, version = "3.2.0" }
 indexmap = { version = "1.9.3", features = ["serde"] }
+opentelemetry = { version="0.16", features = ["serialize", "rt-tokio"] }
+opentelemetry-jaeger = { version="0.15", features = ["rt-tokio"] }
+tokio = { version = "1.0", features = ["full"] }
 
 [package.metadata.bundle]
 name = "perlink"

@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 #[allow(warnings)]
 use std::{env,rc, process::{self, ExitCode}};
+use opentelemetry::{trace::{TraceError, Tracer, TraceContextExt, FutureExt, SpanKind, Span, get_active_span}, sdk::{trace::Config, Resource}, KeyValue, global, Key, Context};
 use window_titles::{Connection, ConnectionTrait};
 use arboard::Clipboard;
 use indexmap::{IndexMap};
@@ -21,7 +22,7 @@ use fltk::{
 };
 
 use serde::{Deserialize, Serialize};
-use std::process::{Command,Stdio};
+use std::{process::{Command,Stdio}, error::Error, time::Duration};
 // use execute::{Execute, command};
 
 use isahc::prelude::*;
@@ -102,6 +103,7 @@ fn reinit(){
 }
 
 // }
+
 pub fn link_finder_str(input: &str) -> Vec<String> {
     let mut links_str = Vec::new();
     let mut finder = LinkFinder::new();
@@ -113,7 +115,27 @@ pub fn link_finder_str(input: &str) -> Vec<String> {
     }
     links_str
 }
-fn main() {
+
+fn init_tracer() -> Result<opentelemetry::sdk::trace::Tracer, TraceError> {
+    opentelemetry_jaeger::new_pipeline()
+        .with_service_name("trace-demo")
+        .with_trace_config(Config::default().with_resource(Resource::new(vec![
+            KeyValue::new("exporter", "otlp-jaeger"),
+            KeyValue::new("service.name", "perlink"),
+            KeyValue::new("service.version", "0.1"),
+            KeyValue::new("host.os", std::env::consts::OS),
+            KeyValue::new("host.architecture", std::env::consts::ARCH),
+       
+        ])))
+        .install_batch(opentelemetry::runtime::Tokio)
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
+    
+    let tracer = init_tracer()?;
+    // .with_events(vec![])
+
     // app_center::start!("522f2740-e466-4804-9e8e-8d975869d4dd");
     human_panic::setup_panic!(human_panic::Metadata {
         version: env!("CARGO_PKG_VERSION").into(),
@@ -161,79 +183,7 @@ fn main() {
             
         },
     }
-    // Create a new preferences key-value map
-    // (Under the hood: HashMap<String, String>)
-    // let mut faves: PreferencesMap<String> = PreferencesMap::new();
-
-    // Edit the preferences (std::collections::HashMap)
     
-    // faves.insert("programming language".into(), "Rust".into());
-
-    // Store the user's preferences
-    // let prefs_key = "tests/docs/basic-example";
-    // let save_result = faves.save(&APP_INFO, &PREFERENCES_KEY);
-    // assert!(save_result.is_ok());
-
-    // ... Then do some stuff ...
-
-    // Retrieve the user's preferences
-    // let mut load_result = get_token(Notimes.to_string());
-    // let mut load_result = get_token(ChosenBrowser.to_string());
-    // assert!(load_result.is_ok());
-    // println!("{}",load_result.unwrap().to_string());
-    // let dbrowser = format!("{:?}",load_result.unwrap());
-
-    // let mut browserbs:PreferencesMap<String> = setup();
-    // for  (k, v) in browserbs.iter(){
-    //     println!("{:?}",k);
-    //     println!("{:?}",v);
-    // } 
-    //PreferencesMap::new();
-    // browserbs.clear();
-    // browserbs.insert("browsername".into(), "commandtoopen".to_string());
-    // browserbs.remove("browsername");
-    // setup();
-    // i=0;
-    
-    // let save_result = browserbs.save(&APP_INFO, PREFERENCES_KEY);
-
-    // match PreferencesMap::<String>::load(&APP_INFO, &PREFERENCES_KEY) {
-        
-    //     Ok(map) => {
-    //         for  (k, v) in map.iter(){
-    //             println!("{:?}",k);
-    //             println!("{:?}",v);
-    //         } 
-    // //         let bnc= map.clone();
-    // //         let bcc= map.clone();
-    // //         let bn: Vec<String> = bnc.into_values().collect();
-    // //         let bc: Vec<String> = bcc.into_keys().collect();
-    // //         let size=bn.length();
-    // // let mut expandedurl = bn.get(1).unwrap().to_string() ;
-
-    // //         // let mut k= map.clone();
-    // //         // map.keys().
-    // //         for i in map.keys(){
-    // //             println!("{:?}",i);
-    // //             // println!("{:?}",map.entry(String::from(i)));
-    // //         }
-    // //         for i in map.values(){
-    // //             println!("{:?}",i);
-    // //         }
-          
-    //     }
-    //     Err(e) => {
-    //       // warn!("Error while loading preferences: {:?}", e);
-    //     //   None         
-    //       println!("None");
-
-    //     }
-    //   }
-    //   println!("config saved to {:?}", prefs_base_dir().unwrap());
-
-
-    //add customise browsr option
-    //add timed use of a particular browser
     
     let mut WIDGET_PADDING: i32 = 20;
     let mut WIDGET_WIDTH: i32 = 420;
@@ -256,14 +206,6 @@ fn main() {
             win.handle(move |f, ev|{
                 // println!("{}----->{}",ev,fltk::app::event_text());
              match ev {
-                // Event::Paste => {
-                    
-                //     true
-                // }
-                // fltk::enums::Event::Resize => {       
-                //     println!("A resize happening: x:{}, y:{}, w:{}, h:{}", f.x(), f.y(), f.width(), f.height());
-                //     true
-                // }
                 fltk::enums::Event::KeyDown => {
                      if fltk::app::event_key() == fltk::enums::Key::from_char('f') {
                         // win.fullscreen(!win.fullscreen_active());
@@ -280,60 +222,20 @@ fn main() {
              }
 });
 let (s, r) = fltk::app::channel();
-//             win.handle(move |f, ev| {
-//                 println!("{:?}",ev);
-//                 println!("{:?}",event_text());
-//                 match ev {
-//                 fltk::enums::Event::Resize => {
-                    
-//                     true
-//                 }
-//                 fltk::enums::Event::KeyDown => {
-//                      if fltk::app::event_key() == fltk::enums::Key::from_char('f') {
-//                         // win.fullscreen(!win.fullscreen_active());
-//                     } else if fltk::app::event_key() == fltk::enums::Key::from_char('q') {
-//                         fltk::app::quit();
-//                     };
-        
-//                     true
-//                 }
-//                 ,
-//                  _ => {
-//                      false
-//                  }
-//              }
-// });
 
-            // let mut text_buffer = TextBuffer::default();
-            // text_buffer.set_text(&expandedurl);
            
             let mut vpack=fltk::group::Pack::new(WIDGET_PADDING,
                 WIDGET_PADDING,
                 WIDGET_WIDTH - 40,
                 WIDGET_HEIGHT - 40,"");
                 win.resizable(&vpack);
-                // let mut url = Input::new(100,25,300,25, "Enter URL");
-                // url.set_trigger(CallbackTrigger::Changed);
-                // let mut uc=false;
-                // url.set_callback(move |input_c: &mut Input| {
-                //         ourl=input_c.value();
-                //         println!("thevalis----->{}",ourl);
-                //         uc=true;
-                //     });
-                    
-                // url.emit(s.clone(),"frominput".to_string());
-            // let mut tbpack=fltk::group::Pack::default().with_size(250,60).center_of(&win);    
+              
                 let mut framet = fltk::frame::Frame::default()
                 .with_size(800,60)
                 // .center_of(&win)
                 .with_label("Loading");
-                // let mut kz = Button::new(0,0,70,20,"test");
-                //                     // .with_align(Align::Left | Align::Inside)
-                //                     kz.emit(s.clone(),"b.label()");
-                
+              
             framet.set_label_size(12);
-            // let mut rt= fltk::frame::Frame::default().with_size(20, 10);
-            // rt.set_label("sd");
             match args.get(1) {
                 Some(val) => match val {
                     val => {
@@ -372,41 +274,9 @@ let (s, r) = fltk::app::channel();
                                 b.set_down_frame(FrameType::FlatBox);
                                 b.set_selection_color(Color::color_average(b.color(), Color::Foreground, 0.9));
                                 b.clear_visible_focus();
-                                // b.set_label_size(app::font_size() - 3);
-                                // b.draw(move |b| {
-                                //     if b.value() {
-                                //         expandedurl=b.label();
-                                //         ourl=kj.to_string();
-                                //     }
-                                // });
+                             
                                 b.set_frame(FrameType::FlatBox);
-            //                     b.handle(move|b, ev| match ev {
-            //                             fltk::enums::Event::Push => {
-            //                                 expandedurl=b.label();
-            // //                 println!("{}",val);
-            //                                 true
-            //                             }
-            //                             _ => false,
-            //                         });
-                                
-                                
-                                // b.set_trigger(CallbackTrigger::Changed);
-                        //         b.set_callback({
-                        //             frame=frame.clone();
-                        //             // let mut expandedurl=expandedurl.clone();
-                        //             // let mut ourl=ourl.clone();                                    
-                        //             move |b| {
-                        //                 frame.set_label(b.label());
-                        //                 // expandedurl=b.label();
-                        //                 // frame.set_label(&b.label());
-                        //                 // sourl.replace(b.label());
-                        //                 println!("{}",b.label());
-                        //                 // sourl=vars{jas:b.label()};
-                        //                 // ourl=b.label();
-                        //         }
-                        // });
-                                
-                            // println!("{}",kj);
+           
                         }
                     }
                     let mut clipboard = Clipboard::new().unwrap();
@@ -445,141 +315,8 @@ let (s, r) = fltk::app::channel();
             }
             
             println!("{}",ourl);
-            // let mut bframe = fltk::frame::Frame::default()
-            //     .with_size(20, 10);
-            
-            // let mut bframee = fltk::frame::Frame::default().with_size(200, 60);
-            
-                    
-                    // tbpack.end();
-                    // tbpack.set_type(fltk::group::PackType::Horizontal);
                 fltk::frame::Frame::default().with_size(20, 10);
-            //-------------------------------------------From here------------------------------------
-            //-------------------------------------------From here------------------------------------
-            //-------------------------------------------From here------------------------------------
-            //-------------------------------------------From here------------------------------------
-            //-------------------------------------------From here------------------------------------
-            //-------------------------------------------From here------------------------------------
-            //-------------------------------------------From here------------------------------------
-            //-------------------------------------------From here------------------------------------
-            //-------------------------------------------From here------------------------------------
-            //-------------------------------------------From here------------------------------------
-            // let mut fnt=fltk::group::Pack::default()
-            //     .with_size(250,30);
-            // let mut cb1 = CheckButton::default().with_size(220,30);
-            // cb1.set_label("Use the same browser for next");
-            // if(get_token(Isenb.to_string()).unwrap().contains("true")){
-            //     cb1.set_checked(true);
-            // }
-            // else{
-            //     cb1.set_checked(false);
-            // }
-            // // cb1.set_checked();
-            // //-----------------------------------------------------------------------------------------
-            // //-----------------------------------------------------------------------------------------
-            // //-----------------------------------------------------------------------------------------
-            // //-----------------------------------------------------------------------------------------
-            // //-----------------------------------------------------------------------------------------
-            // //-----------------------------------------------------------------------------------------
-            // cb1.handle(move|b, ev| match ev {
-            //     fltk::enums::Event::Push => {
-            //         // if(cb1.is_checked()){
-            //         //     set_token(Notimes.to_string(),format!("{:?}",i1.value().to_string()));
-            //         // }
-                    
-            //         // println!("{}",format!("{} {}",browser,expandedurl));
-            //         if(!b.is_checked()){
-            //         set_token(Isenb.to_string(),"start".to_string());
-            //         }
-            //         else{
-            //             set_token(Isenb.to_string(),"stop".to_string());
-            //         }
-                    
-
-            //         // let mut res = Command::new(format!("{}",browser))
-            //         // .arg(format!("{}",expandedurl))
-            //         // .output();
-            //         true
-            //     }
-            //     _ => false,
-            // }); 
-            
-            // let mut i1 = Input::default().with_size(30,30);
-            // i1.set_value("10");
-            // i1.set_trigger(CallbackTrigger::Changed);
-            // i1.set_callback(move |input_c: &mut Input| {
-            //     let cbx=cb1.clone();
-            //     let name = input_c.value();
-            //     // let mut lbl = label_c.lock();
-            //     if(cbx.is_checked()){
-            //         set_token(Notimes.to_string(),input_c.value());
-            //     }
-            //     else{
-            //         set_token(Notimes.to_string(),"0".to_string());
-            //     }
-            // });
-            // //-----------------------------------------------------------------------------------------------------
-            // //-----------------------------------------------------------------------------------------------------
-            // //-----------------------------------------------------------------------------------------------------
-            // //-----------------------------------------------------------------------------------------------------
-            // //-----------------------------------------------------------------------------------------------------
-            // //-----------------------------------------------------------------------------------------------------
-            // //-----------------------------------------------------------------------------------------------------
-            // //-----------------------------------------------------------------------------------------------------
            
-            
-            // // cb1.emit(s,i1.value());
-            // // while app.wait() {
-            // //     match r.recv() {
-            // //         Some(val) => match val {
-            // //             val => {
-            // //                 if(cb1.is_checked()){
-            // //                     println!("setval---->{}",val);
-            // //                     set_token(Notimes.to_string(),format!("{}",val));
-            // //                 }
-            // //                 else{
-            // //                     set_token(Notimes.to_string(),"0".to_string());
-            // //                 }
-            // //             },
-            // //             // Message::Stop => rlist(),
-            // //         },
-            // //         None => (),
-            // //     }
-            // // }
-        
-            
-            
-            // // i1.set_trigger(CallbackTrigger::Changed);
-            // fnt.end();
-            // fnt.set_type(fltk::group::PackType::Horizontal);
-
-//-----------------------------Till here for the checkbutton---------------------------------------
-//-----------------------------Till here for the checkbutton---------------------------------------
-//-----------------------------Till here for the checkbutton---------------------------------------
-//-----------------------------Till here for the checkbutton---------------------------------------
-//-----------------------------Till here for the checkbutton---------------------------------------
-//-----------------------------Till here for the checkbutton---------------------------------------
-//-----------------------------Till here for the checkbutton---------------------------------------
-//-----------------------------Till here for the checkbutton---------------------------------------
-//-----------------------------Till here for the checkbutton---------------------------------------
-//-----------------------------Till here for the checkbutton---------------------------------------
-//-----------------------------Till here for the checkbutton---------------------------------------
-//-----------------------------Till here for the checkbutton---------------------------------------
-
-                    // b1.emit(s, "refresh".to_string());
-                    // let mut hpack=hpack.clone();
-                    // b1.handle(move|b, ev| match ev {
-                    //     fltk::enums::Event::Push => {
-                    //         // println!("{}",format!("{} {}",browser,expandedurl));
-                    //         set_token(browser.to_string());
-                    //         let mut res = Command::new(format!("{}",browser))
-                    //         .arg(format!("{}",expandedurl))
-                    //         .output();
-                    //         true
-                    //     }
-                    //     _ => false,
-                    // });
-            // disp.set_buffer(text_buffer);
             let mut ttb=fltk::group::Pack::default().with_size(
                 10,
                 40) ;
@@ -588,36 +325,7 @@ let (s, r) = fltk::app::channel();
             let mut eub = Button::default().with_size(150,30);
             eub.set_label("expand url");
             eub.emit(s.clone(),"expandurl".to_string());
-            // b1.emit(s, "refresh".to_string());
-            // let mut hpack=hpack.clone();
-            // eub.handle(move|b, ev| match ev {
-            //     fltk::enums::Event::Push => {
-            //         // frame.set_label(&"Expanding URL, Please wait!".to_string());
-            //         match eurl(args.get(1).unwrap().to_string()) {
-            //             Ok(sk) => { 
-            //                 if(sk.to_lowercase().contains("invalid")){
-            //                     setframe(&mut framet,args.get(1).unwrap());
-            //                     // rt.set_label("");
-            //                 }
-            //                 else{
-            //                     setframe(&mut framet, &sk);
-            //                 }
-                            
-            //                 // fltk::dialog::message(90, 90, &sk);{
-            //                     // let mut res = std::process::Command::new(format!("/home/roger/Downloads/waterfox/waterfox {}",sk)).output();
-            //                 // }
-                            
-            //                 // ... use sk ...
-            //             },
-            //             Err(e) => {
-            //                 setframe(&mut framet,"Error");
-            //                 // ... sk is not available, and e explains why ...
-            //             },
-            //         }
-            //         true
-            //     }
-            //     _ => false,
-            // });
+            
             fltk::frame::Frame::default().with_size(20, 10);
             // let mut bframe1 = fltk::frame::Frame::default().with_size(300, 60);
             let mut b11 = Button::default().with_size(150,30);
@@ -625,26 +333,7 @@ let (s, r) = fltk::app::channel();
             // b1.emit(s, "refresh".to_string());
             // let mut hpack=hpack.clone();
             b11.emit(s.clone(),"all".to_string());
-            // b11.handle(move|b, ev| match ev {
-            //     fltk::enums::Event::Push => {
-            //         // i1.value();
-            //         // if(cb1.is_checked()){
-            //         //     set_token(Notimes.to_string(),format!("{:?}",i1.value().to_string()));
-            //         // }
-                    
-            //         // println!("{}",format!("{} {}",browser,expandedurl));
-            //         for (k,v) in setup(){
-            //             let mut res = Command::new(format!("{}",v))
-            //                             .arg(format!("{}",ourl))
-            //                             .output();
-            //         }
-            //         // set_token(ChosenBrowser.to_string(),browser.to_string());
-                    
-            //         fltk::app::quit();
-            //         true
-            //     }
-            //     _ => false,
-            // });
+            
 
             ttb.end();
             ttb.set_type(fltk::group::PackType::Horizontal);
@@ -660,15 +349,7 @@ let (s, r) = fltk::app::channel();
                 svw.set_label("share via web");
                 svw.emit(s.clone(),"svw".to_string());
                 
-            // b1.emit(s, "refresh".to_string());
-            // let mut hpack=hpack.clone();
-            // eub.handle(move|b, ev| match ev {
-            //     fltk::enums::Event::Push => {
-            //         // frame.set_label(&"Expanding URL, Please wait!".to_string());
-            //         true
-            //     },
-            //     _ => false,
-            // });
+            
             fltk::frame::Frame::default().with_size(20, 10);
             // let mut bframe1 = fltk::frame::Frame::default().with_size(300, 60);
             let mut svc = Button::default().with_size(150,30);
@@ -700,43 +381,7 @@ let (s, r) = fltk::app::channel();
                     
                     b1.set_label(&format!("{}",k));
                     b1.emit(s.clone(),v);
-                    // b1.emit(s, "refresh".to_string());
-                    // let mut hpack=hpack.clone();
-                    // b1.handle(move|b, ev| match ev {
-                    //     fltk::enums::Event::Push => {
-                    //         // i1.value();
-                    //         // if(cb1.is_checked()){
-                    //         //     set_token(Notimes.to_string(),format!("{:?}",i1.value().to_string()));
-                    //         // }
-                            
-                    //         // println!("{}",format!("{} {}",browser,expandedurl));
-                    //         // set_token(ChosenBrowser.to_string(),browser.to_string());
-                           
-                    //     //     if cfg!(windows){
-                    //     //     if(v.contains("exe")){
-                    //     //         let mut res = Command::new(format!("{}",v))
-                    //     //                     .arg(format!("{}",expandedurl))
-                    //     //                     .output();
-                    //     //                     fltk::app::quit();
-                    //     //     }
-                    //     //     else{
-                    //     //          fltk::dialog::message(90, 90, "Please setup config before use. You can find it at D");{
-                    //     //     }
-                    //     //     }
-                    //     // }
-                    //     // else
-                    //     {
-                    //             let mut res = Command::new(format!("{}",v))
-                    //                             .arg(format!("{}",expandedurl))
-                    //                             .output();
-                    //                             println!("oepning----->{}",expandedurl);
-                    //                             fltk::app::quit();
-                    //         }
-                        
-                    //     true
-                    //     }
-                    //     _ => false,
-                    // });
+                    
                     i+=1;
                     if(i%3 ==0){
                         println!("i value--------->{}",i);
@@ -769,6 +414,10 @@ let (s, r) = fltk::app::channel();
                     Some(val) => 
                     match val {
                         val => {
+                            // get_active_span(|span| {
+                            //     span.add_event("An event!".to_string(), vec![KeyValue::new("happened", true)]);
+                            // });
+                            
                             // if(val == "frominput"){
                             //             ourl=url.value();
                             //     }
@@ -813,6 +462,7 @@ let (s, r) = fltk::app::channel();
                             }
                             else if(val == "all"){
                                 println!("all------------->");
+                                // span.add_event("opening".to_string(), vec![]);
                                 // if ourl==" "{
                                 //     ourl=url.value(); 
                                 //  }
@@ -820,8 +470,17 @@ let (s, r) = fltk::app::channel();
                                     reinit();
                                 }
                                 let(hmap)=prefstore::getall(appname);
+                            
+    ;
+                            
+
+                                // span.add_event("openinall".to_string(), vec![]);
                                 for (_,v) in hmap{
-                                    open(&v,&ourl);
+                                    // let tracer = global::tracer("opentracer");
+
+                                        // .start(&tracer);
+
+                                        open(&v,&ourl);
                                 }
                                 true;
                             }
@@ -846,10 +505,26 @@ let (s, r) = fltk::app::channel();
                                 //  }
                                  
                                 println!("{}------------->r{}r",val,expandedurl);
-                                
-                                open(&val,&expandedurl);
-                                                println!("oepning----->{}",expandedurl);
-                                                fltk::app::quit();
+    // let tracer = global::tracer("opentracer");
+
+                // span.add_event(val.to_string(), vec![]);
+
+                
+                            // let tracer = global::tracer("init");
+                            
+                            let mut span=tracer
+                                .span_builder("init")
+                                .with_kind(SpanKind::Internal)
+                                .start(&tracer);
+                            let cx = Context::current_with_span(span);
+
+                            tokio::time::sleep(Duration::from_millis(150)).await;
+
+
+                            
+                                open(&val,&expandedurl).with_context(cx).await;
+                                println!("opening----->{}",expandedurl);
+                                fltk::app::quit();
                                                 true;
                             }
                             
@@ -865,46 +540,33 @@ let (s, r) = fltk::app::channel();
                 // let frame=win.frame.clone();
                 // frame.set_label("&val");
             }
+            opentelemetry::global::shutdown_tracer_provider();
+    process::exit(0);
             // app.run().unwrap();    
-            
+            Ok(())
 }
 #[cfg(target_os = "linux")]
 use arboard::SetExtLinux;
 const DAEMONIZE_ARG: &str = "__internal_daemonize";
-// fn sendtoclip(msg:&String) -> Result<()> {
-// 	#[cfg(target_os = "linux")]
-// 	if env::args().nth(1).as_deref() == Some(DAEMONIZE_ARG) {
-// 		Clipboard::new()?.set().wait().text(msg)?;
-// 		return Ok(());
-// 	}
 
-// 	// SimpleLogger::new().init().unwrap();
-
-// 	if cfg!(target_os = "linux") {
-// 		process::Command::new(env::current_exe()?)
-// 			.arg(DAEMONIZE_ARG)
-// 			.stdin(process::Stdio::null())
-// 			.stdout(process::Stdio::null())
-// 			.stderr(process::Stdio::null())
-// 			.current_dir("/")
-// 			.spawn()?;
-// 	} else {
-// 		Clipboard::new()?.set_text("Hello, world!")?;
-// 	}
-
-// 	Ok(())
-// }
 fn setframe(f:&mut Frame,s: &str){
     let ss: String = s.chars().skip(0).take(40).collect();
     f.set_label(&ss);
 }
-fn open(v: &String,ourl: &String){
+async fn open(v: &String,ourl: &String)->Result<(),TraceError>{
+    // init_tracer().context("Setting up the opentelemetry exporter")?;
     // #[cfg(target_os = "linux")]
     // #[cfg(target_os = "windows")]
-    { 
+    // { 
     println!("test--->{}",ourl);
     println!("browser--->{}",v);
+    // let _tracer = init_tracer()?;
     
+    let tracer = global::tracer("opentracer");
+    let mut span = tracer.start("opentracer");
+    span.add_event(v.to_string(), vec![]);
+    tokio::time::sleep(Duration::from_millis(150)).await;
+
     let strings:Vec<String> = v.split_whitespace().map(str::to_string).collect();
     let mut res = Command::new(format!("{}",strings[0]));
     let slice = &strings[1..strings.len()];
@@ -917,24 +579,7 @@ fn open(v: &String,ourl: &String){
                         .spawn()
                         .expect("failed to execute process");
     eprintln!("{:?}",tte);
+    
 
-        // #[cfg(target_os = "linux")]
-    }
-    // #[cfg(target_os = "macos")]{
-    //     let mut res =  Command::new("open");
-    //     let strings:Vec<String> = v.split_whitespace().map(str::to_string).collect();
-    //     res.arg("-a");
-    //     for k in strings{ 
-    //         res.arg(k);
-    //     }
-    //     res.arg(&ourl).spawn();
-    // }
-    // expandedurl=url.value();
-   
-    process::exit(0);
-
-    // let mut command = command(format!("{} {}",v,ourl));
-    //             command.stdout(Stdio::piped());
-    //     let output = command.execute_output().unwrap();
-    //     println!("{}", String::from_utf8(output.stdout).unwrap());
+    Ok(())
 }
