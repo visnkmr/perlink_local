@@ -1,12 +1,14 @@
 #![windows_subsystem = "windows"]
 #[allow(warnings)]
 use std::{env,rc, process::{self, ExitCode}};
-use opentelemetry::{trace::{TraceError, Tracer, TraceContextExt, FutureExt, SpanKind, Span, get_active_span}, sdk::{trace::Config, Resource}, KeyValue, global, Key, Context};
+use opentelemetry::{trace::{TraceError, Tracer, TraceContextExt, FutureExt, SpanKind, Span, get_active_span}, sdk::{trace::Config, Resource, propagation::TraceContextPropagator}, KeyValue, global, Key, Context};
+use tracing::{info, span, log::warn, trace};
+use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, fmt, util::SubscriberInitExt};
 use window_titles::{Connection, ConnectionTrait};
 use arboard::Clipboard;
 use indexmap::{IndexMap};
 extern crate linkify;
-
+// mod log;
 use linkify::{LinkFinder, LinkKind};
 // use std::option::Option;
 use fltk::{
@@ -22,7 +24,7 @@ use fltk::{
 };
 
 use serde::{Deserialize, Serialize};
-use std::{process::{Command,Stdio}, error::Error, time::Duration};
+use std::{process::{Command,Stdio}, error::Error, time::Duration, thread};
 // use execute::{Execute, command};
 
 use isahc::prelude::*;
@@ -116,27 +118,30 @@ pub fn link_finder_str(input: &str) -> Vec<String> {
     links_str
 }
 
-fn init_tracer() -> Result<opentelemetry::sdk::trace::Tracer, TraceError> {
-    opentelemetry_jaeger::new_pipeline()
-        .with_service_name("trace-demo")
-        .with_trace_config(Config::default().with_resource(Resource::new(vec![
-            KeyValue::new("exporter", "otlp-jaeger"),
-            KeyValue::new("service.name", "perlink"),
-            KeyValue::new("service.version", "0.1"),
-            KeyValue::new("host.os", std::env::consts::OS),
-            KeyValue::new("host.architecture", std::env::consts::ARCH),
-       
-        ])))
-        .install_batch(opentelemetry::runtime::Tokio)
-}
-
+use dotenv::dotenv;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
-    
-    let tracer = init_tracer()?;
-    // .with_events(vec![])
+    dotenv().ok();
+    // construct a subscriber that prints formatted traces to stdout
+    // let subscriber = 
+    // tracing_subscriber::FmtSubscriber::new();
+    let tracer = opentelemetry_jaeger::new_pipeline()
+        .with_service_name("perlink_main")
+        .install_simple()?;
+    let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    // app_center::start!("522f2740-e466-4804-9e8e-8d975869d4dd");
+    tracing_subscriber::registry()
+        .with(opentelemetry)
+        // Continue logging to stdout
+        .with(fmt::Layer::default())
+        .try_init()?;
+    span!(tracing::Level::INFO, "init_started")
+        .in_scope(||{
+    
+    let root = span!(tracing::Level::INFO, "init_setup", work_units = 2);
+    info!("setup_crashreporting");
+    let ac_key = env::var("APPCENTER_KEY").unwrap();
+    app_center::start!(ac_key);
     human_panic::setup_panic!(human_panic::Metadata {
         version: env!("CARGO_PKG_VERSION").into(),
         name: env!("CARGO_PKG_NAME").into(),
@@ -149,6 +154,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
     //     location: Location::Auto,
     //     format: Format::Toml,
     // };
+    info!("check_for_init_args");
+
     let args: Vec<String> = env::args().collect();
     match args.get(1) {
         
@@ -157,17 +164,22 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
                 println!("{}----------->",val);
 
                 if val == "reinit"{
+                    // let mut initspan=global::tracer("perlink").start("initconfig");
+                    info!("reinit");
                     println!("Reinitilizing config file.");
                     reinit();
+                    // initspan.end();
                     process::exit(0);
 
                 }if val == "add"{
+                    info!("add_browser");
                     println!("Added new browser.");
                     appendfile(args.get(2).unwrap().to_string(),args.get(3).unwrap().to_string());
                     process::exit(0);
 
                 }
                 if val == "clear"{
+                    info!("clear_browser_list");
                     println!("Cleared browser list.");
                     prefstore::clearall(appname,"txt");
                     process::exit(0);
@@ -200,6 +212,9 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
     // let mut ourl = args.get(1).unwrap().to_string() ;
     // expandedurl = sk;
     // let (s, r) = fltk::app::channel();
+    drop(root);
+    let root = span!(tracing::Level::INFO, "loading_ui", work_units = 2);
+
             let mut app = App::default();
             
             let mut win = Window::default().with_size(WIDGET_WIDTH, WIDGET_HEIGHT).with_label("Choose browser");
@@ -236,15 +251,21 @@ let (s, r) = fltk::app::channel();
                 .with_label("Loading");
               
             framet.set_label_size(12);
+            let cfu = span!(tracing::Level::INFO, "get_url", work_units = 2);
             match args.get(1) {
                 Some(val) => match val {
+
                     val => {
+                        info!("Found_url_in_args");
+
                         expandedurl=val.to_string();
                         ourl=val.to_string();
                         setframe(&mut framet,&val);
                         // rt.set_label("");
                     }
                     _ =>{
+                        info!("invalid_args");
+
                         expandedurl=" ".to_string();
                         ourl=" ".to_string();
                         setframe(&mut framet,&"invalid url".to_string());
@@ -252,10 +273,14 @@ let (s, r) = fltk::app::channel();
                     // Message::Stop => rlist(),
                 },
                 None => {
+                let cfu = span!(tracing::Level::INFO, "no_url_in_args", work_units = 2);
+
                     expandedurl=" ".to_string();
                     // let k=vars{jas:"".to_string()};
                     ourl=" ".to_string();
                     println!("here");
+                    info!("Checking_in_window_titles");
+
                     let connection = Connection::new().unwrap();
                     // let mut pref = HashMap::<String,String>::new();
                     // let mut lks = vec!["", "New York"];
@@ -263,6 +288,7 @@ let (s, r) = fltk::app::channel();
                     for i in connection.window_titles().unwrap(){
                         // println!("{}",i.to_lowercase());
                         for kj in link_finder_str(&i){
+                            info!("found_window");
                             let ss: String = kj.chars().skip(0).take(40).collect();
                             let mut b = Button::default()
                                     .with_size(70, 20)
@@ -279,10 +305,15 @@ let (s, r) = fltk::app::channel();
            
                         }
                     }
+
+                    info!("Checking_in_clipboard");
+
                     let mut clipboard = Clipboard::new().unwrap();
                     match clipboard.get_text() {
                     Ok(sk) => { 
                         for kj in link_finder_str(&sk){
+                    info!("found_clip");
+
                             let ss: String = kj.chars().skip(0).take(40).collect();
                             let mut b = Button::default()
                                 .with_size(70, 20)
@@ -293,7 +324,7 @@ let (s, r) = fltk::app::channel();
                             b.set_selection_color(Color::color_average(b.color(), Color::Foreground, 0.9));
                             b.clear_visible_focus();
                             b.set_frame(FrameType::FlatBox);
-                        println!("{}",kj);
+                        // println!("{}",kj);
                         }
                         
                         // fltk::dialog::message(90, 90, &sk);{
@@ -303,18 +334,22 @@ let (s, r) = fltk::app::channel();
                         // ... use sk ...
                     },
                     Err(e) => {
+                    info!("error_fetch_clipboard");
+
                         println!("Error Clipboard");
                         // setframe(&mut framet,"Error");
                         // ... sk is not available, and e explains why ...
                     },
                 }
+                drop(cfu);
                                        
                 }
                     
             ,
             }
             
-            println!("{}",ourl);
+            drop(cfu);
+            // println!("{}",ourl);
                 fltk::frame::Frame::default().with_size(20, 10);
            
             let mut ttb=fltk::group::Pack::default().with_size(
@@ -384,7 +419,7 @@ let (s, r) = fltk::app::channel();
                     
                     i+=1;
                     if(i%3 ==0){
-                        println!("i value--------->{}",i);
+                        // println!("i value--------->{}",i);
                         hpack.end();
                     hpack.set_type(fltk::group::PackType::Horizontal);
                     fltk::frame::Frame::default().with_size(20, 10);
@@ -405,8 +440,13 @@ let (s, r) = fltk::app::channel();
 
             win.end();
             win.show();
+            drop(root);
+            span!(tracing::Level::INFO, "waiting_for_input")
+        .in_scope(|| {
+            info!("waiting for input");
             // let mut frame1 =frame.clone();
-            while app.wait() {
+            // get_active_span(|span|async{
+                while app.wait() {
                 // setframe(&mut frame, "");
                 // frame=frame.clone();
                 match r.recv() {
@@ -423,12 +463,13 @@ let (s, r) = fltk::app::channel();
                             //     }
                             // let mut str=val;
                             if(val.contains("//")){
+                                info!("expanded_url");
                                 // let k= format!("{}",val);
                                 // frame.set_label(&k);
                                 setframe(&mut framet, &val);
-                                println!("//------------->");
+                                // println!("//------------->");
 
-                                println!("{}",format!("{}",val));
+                                // println!("{}",format!("{}",val));
                             ourl=format!("{}",val);
                             expandedurl=val;
                             // rt.set_label("title");
@@ -438,6 +479,7 @@ let (s, r) = fltk::app::channel();
                             true;
                             }
                             else if val == "expandurl"{
+                                info!("expand_url");
                                 match eurl(ourl.clone()) {
                                     Ok(sk) => { 
                                         if(sk.to_lowercase().contains("invalid")){
@@ -461,32 +503,35 @@ let (s, r) = fltk::app::channel();
                                 }
                             }
                             else if(val == "all"){
-                                println!("all------------->");
+                                // println!("all------------->");
                                 // span.add_event("opening".to_string(), vec![]);
                                 // if ourl==" "{
                                 //     ourl=url.value(); 
+                                info!("opening_in_all_browsers");
+                                let root = span!(tracing::Level::INFO, "opening_in_all", work_units = 2);
                                 //  }
                                 if(prefstore::getall(appname).is_empty()){
                                     reinit();
                                 }
                                 let(hmap)=prefstore::getall(appname);
-                            
+                                
     ;
                             
-
+                                // let cx = Context::current();
+                                // let span = cx.span();
+                                // span.add_event("Opening in all browsers".to_string(), vec![]);
                                 // span.add_event("openinall".to_string(), vec![]);
                                 for (_,v) in hmap{
-                                    // let tracer = global::tracer("opentracer");
-
-                                        // .start(&tracer);
 
                                         open(&v,&ourl);
                                 }
+                                drop(root);
                                 true;
                             }
                             else if(val == "svc"){
+                                info!("fromclipboard");
                                 let mut clipboard = Clipboard::new().unwrap();
-                                println!("{}",&ourl);
+                                // println!("{}",&ourl);
                                 #[cfg(target_os = "linux")]{
                                     clipboard.set().wait().text(&ourl).unwrap();
                                 }
@@ -494,17 +539,19 @@ let (s, r) = fltk::app::channel();
                                     clipboard.set_text(&ourl).unwrap();
                                 }
                                 // clipboard.set_text("abc".to_string()).unwrap();
-                                println!("{}",clipboard.get_text().unwrap());
+                                // println!("{}",clipboard.get_text().unwrap());
                             }else if(val == "svw"){
                                 // ada
                             }
                             // else 
                             else{
+                                let root = span!(tracing::Level::INFO, "clicked", work_units = 2);
+                                info!("clicked_{val}");
                                 // if ourl==" "{
                                 //     ourl=url.value(); 
                                 //  }
                                  
-                                println!("{}------------->r{}r",val,expandedurl);
+                                // println!("{}------------->r{}r",val,expandedurl);
     // let tracer = global::tracer("opentracer");
 
                 // span.add_event(val.to_string(), vec![]);
@@ -512,18 +559,15 @@ let (s, r) = fltk::app::channel();
                 
                             // let tracer = global::tracer("init");
                             
-                            let mut span=tracer
-                                .span_builder("init")
-                                .with_kind(SpanKind::Internal)
-                                .start(&tracer);
-                            let cx = Context::current_with_span(span);
-
-                            tokio::time::sleep(Duration::from_millis(150)).await;
-
-
                             
-                                open(&val,&expandedurl).with_context(cx).await;
-                                println!("opening----->{}",expandedurl);
+                            // let cx = Context::current();
+                            // let span = cx.span();
+                            // span.add_event("opening in browser".to_string(), vec![]);
+                                open(&val,&expandedurl);
+                                // .with_context(cx).await;
+                                // println!("opening----->{}",expandedurl);
+                                drop(root);
+                                
                                 fltk::app::quit();
                                                 true;
                             }
@@ -537,10 +581,16 @@ let (s, r) = fltk::app::channel();
                         // println!("stop");
                     })
                 }
+                
                 // let frame=win.frame.clone();
                 // frame.set_label("&val");
             }
-            opentelemetry::global::shutdown_tracer_provider();
+        });
+            warn!("Exiting");
+        });
+            // .with_context(cx);
+            // });
+        // global::shutdown_tracer_provider();
     process::exit(0);
             // app.run().unwrap();    
             Ok(())
@@ -553,19 +603,10 @@ fn setframe(f:&mut Frame,s: &str){
     let ss: String = s.chars().skip(0).take(40).collect();
     f.set_label(&ss);
 }
-async fn open(v: &String,ourl: &String)->Result<(),TraceError>{
-    // init_tracer().context("Setting up the opentelemetry exporter")?;
-    // #[cfg(target_os = "linux")]
-    // #[cfg(target_os = "windows")]
-    // { 
-    println!("test--->{}",ourl);
-    println!("browser--->{}",v);
-    // let _tracer = init_tracer()?;
-    
-    let tracer = global::tracer("opentracer");
-    let mut span = tracer.start("opentracer");
-    span.add_event(v.to_string(), vec![]);
-    tokio::time::sleep(Duration::from_millis(150)).await;
+// async 
+fn open(v: &String,ourl: &String)->Result<(),()>{
+    let root = span!(tracing::Level::INFO, "opening_browser", work_units = 2);
+   
 
     let strings:Vec<String> = v.split_whitespace().map(str::to_string).collect();
     let mut res = Command::new(format!("{}",strings[0]));
@@ -579,7 +620,7 @@ async fn open(v: &String,ourl: &String)->Result<(),TraceError>{
                         .spawn()
                         .expect("failed to execute process");
     eprintln!("{:?}",tte);
-    
+    drop(root);
 
     Ok(())
 }
