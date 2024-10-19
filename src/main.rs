@@ -140,8 +140,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
     
     let root = span!(tracing::Level::INFO, "init_setup", work_units = 2);
     info!("setup_crashreporting");
-    let ac_key = env::var("APPCENTER_KEY").unwrap();
-    app_center::start!(ac_key);
+    // let ac_key = env::var("APPCENTER_KEY").unwrap();
+    // app_center::start!(ac_key);
     human_panic::setup_panic!(human_panic::Metadata {
         version: env!("CARGO_PKG_VERSION").into(),
         name: env!("CARGO_PKG_NAME").into(),

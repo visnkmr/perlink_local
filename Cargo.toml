@@ -13,9 +13,9 @@ description = "perlink"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-fltk = "1.4.4"
+fltk = { version = "1.4.34", features = ["fltk-bundled"] }
 dotenv = "0.15.0"
-app-center = { git = "https://github.com/jeff-hiner/appcenter-rs" }
+# app-center = { git = "https://github.com/jeff-hiner/appcenter-rs" }
 human-panic = { git = "https://github.com/visnkmr/save-crash-logs-rs" }
 prefstore = { git = "https://github.com/visnkmr/prefstore/" }
 isahc = { features = ["text-decoding"], default-features = false, version = "1.7.2" }
