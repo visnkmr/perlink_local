@@ -39,7 +39,7 @@ fn eurl(t: String) -> Result<String,()> {
     // return Ok("try".to_string());
     println!("get {} val----->{}","expanding",t);
     let mut response = isahc::get(
-        format!("{}{}",prefstore::getcustom(appname, "website.su", "https://unshorten.me/s/".to_string()),t).as_str()
+        format!("{}{}",prefstore::getcustom(appname, "website.su", "https://unshorten.me/s/".to_string()).unwrap(),t).as_str()
     ).map_err(|op|{
         eprintln!("Could not get expanded url. error:{}",op)
     }).unwrap();
@@ -78,30 +78,80 @@ fn appendfile(browsername:String,browsercommand:String){
     prefstore::savepreference(appname, browsername,browsercommand);
     }
 fn reinit(){
-    // my_abserde.delete().expect("");    
-    // let mut pref = IndexMap::<String,String>::new();
-    let mut browsers;
-    let browsers_names;
-    // let mut browsers = ["V:\\Firefox\\firefox.exe","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
-    #[cfg(not(target_os = "macos"))]{
-        browsers = ["firefox","firefox","chromium","waterfox","vivaldi-stable","firefox-dev","firefox-beta"];
-        browsers_names = ["firefox private window","firefox","chromium","waterfox","vivaldi stable","firefox dev","firefox beta"];
+    // Clear existing preferences first
+    if let Ok(existing_browsers) = prefstore::getall(appname) {
+        for (key, _) in existing_browsers {
+            let _ = prefstore::clearpreference(appname, &key);
+        }
     }
-    #[cfg(target_os = "macos")]{
-        browsers = ["open -a Firefox --args --private-window","open -a Firefox --args","open -a Safari --args"];
-        browsers_names = ["firefox private","firefox","safari"];
-    }
-    // #[cfg(not(target_os = "linux"))]{
 
-    // }
-    // setup();
-    let mut i=0;
-    for br in browsers{
-        prefstore::savepreference(appname, br,browsers_names.get(i).unwrap().to_string());
-        i+=1;
+    let browsers_commands;
+    let browsers_display_names;
+
+    #[cfg(target_os = "windows")] {
+        // Windows browser commands - use executable names that should be in PATH
+        browsers_commands = [
+            "firefox.exe --private-window",  // Firefox private window
+            "firefox.exe",                   // Firefox
+            "chrome.exe",                    // Chrome
+            "msedge.exe",                    // Edge
+            "waterfox.exe",                  // Waterfox
+            "vivaldi.exe",                   // Vivaldi
+            "opera.exe",                     // Opera
+        ];
+        browsers_display_names = [
+            "Firefox Private",
+            "Firefox",
+            "Chrome",
+            "Edge",
+            "Waterfox",
+            "Vivaldi",
+            "Opera",
+        ];
     }
+    #[cfg(target_os = "linux")] {
+        browsers_commands = [
+            "firefox --private-window",
+            "firefox",
+            "google-chrome",
+            "chromium",
+            "waterfox",
+            "vivaldi-stable",
+            "opera",
+        ];
+        browsers_display_names = [
+            "Firefox Private",
+            "Firefox",
+            "Chrome",
+            "Chromium",
+            "Waterfox",
+            "Vivaldi",
+            "Opera",
+        ];
+    }
+    #[cfg(target_os = "macos")] {
+        browsers_commands = [
+            "open -a Firefox --args --private-window",
+            "open -a Firefox --args",
+            "open -a 'Google Chrome' --args",
+            "open -a Safari --args",
+        ];
+        browsers_display_names = [
+            "Firefox Private",
+            "Firefox",
+            "Chrome",
+            "Safari",
+        ];
+    }
+
+    // Save browser preferences
+    for (i, command) in browsers_commands.iter().enumerate() {
+        if let Some(display_name) = browsers_display_names.get(i) {
+            prefstore::savepreference(appname, display_name.to_string(), *command);
+        }
+    }
+
     prefstore::savecustom(appname,"website.su", "https://unshorten.me/s/".to_string());
-            
 }
 
 // }
@@ -119,6 +169,72 @@ pub fn link_finder_str(input: &str) -> Vec<String> {
 }
 
 use dotenv::dotenv;
+
+// Windows-specific imports
+#[cfg(target_os = "windows")]
+use winreg::enums::*;
+#[cfg(target_os = "windows")]
+use winreg::RegKey;
+#[cfg(target_os = "windows")]
+use std::path::PathBuf;
+
+#[cfg(target_os = "windows")]
+fn get_exe_path() -> Result<String, Box<dyn Error + Send + Sync + 'static>> {
+    use std::env;
+    let current_exe = env::current_exe()?;
+    Ok(current_exe.to_string_lossy().to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn register_protocol_handler() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    let exe_path = get_exe_path()?;
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+
+    // Register the application
+    let (app_key, _) = hkcu.create_subkey("Software\\Classes\\perlink")?;
+    app_key.set_value("", &"URL:perlink Protocol")?;
+    app_key.set_value("URL Protocol", &"")?;
+
+    let (shell_key, _) = app_key.create_subkey("shell\\open\\command")?;
+    shell_key.set_value("", &format!("\"{}\" \"%1\"", exe_path))?;
+
+    // Register for http protocol
+    let (http_key, _) = hkcu.create_subkey("Software\\Classes\\http\\shell\\open\\command")?;
+    http_key.set_value("", &format!("\"{}\" \"%1\"", exe_path))?;
+
+    // Register for https protocol
+    let (https_key, _) = hkcu.create_subkey("Software\\Classes\\https\\shell\\open\\command")?;
+    https_key.set_value("", &format!("\"{}\" \"%1\"", exe_path))?;
+
+    println!("Protocol handler registered successfully!");
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn unregister_protocol_handler() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+
+    // Remove protocol associations
+    let _ = hkcu.delete_subkey_all("Software\\Classes\\http\\shell\\open\\command");
+    let _ = hkcu.delete_subkey_all("Software\\Classes\\https\\shell\\open\\command");
+    let _ = hkcu.delete_subkey_all("Software\\Classes\\perlink");
+
+    println!("Protocol handler unregistered successfully!");
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn register_protocol_handler() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    println!("Protocol handler registration is only supported on Windows.");
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn unregister_protocol_handler() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    println!("Protocol handler unregistration is only supported on Windows.");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
     dotenv().ok();
@@ -158,7 +274,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
 
     let args: Vec<String> = env::args().collect();
     match args.get(1) {
-        
+
         Some(val) => match val {
             val => {
                 println!("{}----------->",val);
@@ -185,14 +301,44 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
                     process::exit(0);
 
                 }
+                if val == "install"{
+                    info!("install_protocol_handler");
+                    println!("Installing protocol handler...");
+                    if let Err(e) = register_protocol_handler() {
+                        eprintln!("Failed to install protocol handler: {}", e);
+                        process::exit(1);
+                    }
+                    process::exit(0);
+
+                }
+                if val == "uninstall"{
+                    info!("uninstall_protocol_handler");
+                    println!("Uninstalling protocol handler...");
+                    if let Err(e) = unregister_protocol_handler() {
+                        eprintln!("Failed to uninstall protocol handler: {}", e);
+                        process::exit(1);
+                    }
+                    process::exit(0);
+
+                }
+                // Check if it's a URL (starts with http:// or https://)
+                if val.starts_with("http://") || val.starts_with("https://") {
+                    // It's a URL from protocol handler, continue to GUI
+                    info!("url_from_protocol_handler");
+                } else {
+                    // Unknown command
+                    println!("Unknown command: {}", val);
+                    println!("Available commands: reinit, add, clear, install, uninstall");
+                    process::exit(1);
+                }
             }
             _ =>{
-                
+
             },
             // Message::Stop => rlist(),
         },
         None => {
-            
+
         },
     }
     
@@ -401,11 +547,11 @@ let (s, r) = fltk::app::channel();
                 // browsers=browsers.clone();
                 let mut i=0;
                 // let mut bl:PreferencesMap<String> = setup();
-                if(prefstore::getall(appname).is_empty()){
+                if(prefstore::getall(appname).unwrap_or(vec![(String::new(),String::new())]).is_empty()){
                     reinit();
                 }
                 
-                for (k,v) in prefstore::getall(appname) {
+                for (k,v) in prefstore::getall(appname).unwrap_or(vec![(String::new(),String::new())]) {
                     let expandedurl=expandedurl.clone();
                     fltk::frame::Frame::default().with_size(20, 10);
                     let k: String = k.chars().skip(0).take(10).collect();
@@ -510,10 +656,10 @@ let (s, r) = fltk::app::channel();
                                 info!("opening_in_all_browsers");
                                 let root = span!(tracing::Level::INFO, "opening_in_all", work_units = 2);
                                 //  }
-                                if(prefstore::getall(appname).is_empty()){
+                                if(prefstore::getall(appname).unwrap_or(vec![(String::new(),String::new())]).is_empty()){
                                     reinit();
                                 }
-                                let(hmap)=prefstore::getall(appname);
+                                let(hmap)=prefstore::getall(appname).unwrap_or(vec![(String::new(),String::new())]);
                                 
     ;
                             

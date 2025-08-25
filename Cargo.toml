@@ -38,9 +38,12 @@ tracing-subscriber="0.3.17"
 # Implements the types defined in the Otel spec
 opentelemetry = "0.17.0"
 # Integration between the tracing crate and the opentelemetry crate
-tracing-opentelemetry = "0.17.2" 
+tracing-opentelemetry = "0.17.2"
 # Allows you to export data to Jaeger
 opentelemetry-jaeger = "0.16.0"
+# Windows-specific dependencies
+[target.'cfg(target_os = "windows")'.dependencies]
+winreg = "0.52"
 
 [package.metadata.bundle]
 name = "perlink"
