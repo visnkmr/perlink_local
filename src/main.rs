@@ -498,8 +498,38 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
     
     
     let mut WIDGET_PADDING: i32 = 20;
-    let mut WIDGET_WIDTH: i32 = 420;
-    let mut WIDGET_HEIGHT: i32 = 400;  
+    let mut WIDGET_WIDTH: i32 = 400;
+
+    // Dynamic window height calculation based on number of installed browsers
+    // This ensures the window fits all browser buttons comfortably
+    let browser_count = prefstore::getall(appname).unwrap_or(vec![(String::new(),String::new())]).len() as i32;
+    let browsers_per_row = 3; // Browser buttons are arranged in rows of 3
+    let button_height = 40; // Height of each browser button
+    let button_spacing = 5; // Spacing between button rows
+
+    // Calculate how many rows of browsers we need
+    let browser_rows = if browser_count > 0 {
+        ((browser_count as f32) / (browsers_per_row as f32)).ceil() as i32
+    } else {
+        1 // minimum 1 row even if no browsers
+    };
+
+    // Calculate space needed for different UI sections:
+    let header_section_height = 70; // URL frame + expand button + all browsers button
+    let action_buttons_height = 70; // share via web + copy to clipboard buttons
+    let browser_section_height = browser_rows * button_height + (browser_rows - 1) * button_spacing;
+    let padding_and_spacing = WIDGET_PADDING * 4 + 60; // padding + frame spacing
+
+    let mut WIDGET_HEIGHT: i32 = header_section_height + action_buttons_height + browser_section_height + padding_and_spacing;
+
+    // Set reasonable min/max window heights
+    if WIDGET_HEIGHT < 350 {
+        WIDGET_HEIGHT = 350; // Minimum usable height
+    } else if WIDGET_HEIGHT > 800 {
+        WIDGET_HEIGHT = 800; // Maximum height to keep window manageable
+    }
+
+    println!("Dynamic window sizing: {} browsers -> {} rows -> {}px height", browser_count, browser_rows, WIDGET_HEIGHT);
     let args: Vec<String> = env::args().collect();
     let mut expandedurl = "".to_string();
     let mut ourl = "".to_string();
