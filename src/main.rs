@@ -85,32 +85,34 @@ fn reinit(){
         }
     }
 
-    let browsers_commands;
-    let browsers_display_names;
-
     #[cfg(target_os = "windows")] {
-        // Windows browser commands - use executable names that should be in PATH
-        browsers_commands = [
-            "firefox.exe --private-window",  // Firefox private window
-            "firefox.exe",                   // Firefox
-            "chrome.exe",                    // Chrome
-            "msedge.exe",                    // Edge
-            "waterfox.exe",                  // Waterfox
-            "vivaldi.exe",                   // Vivaldi
-            "opera.exe",                     // Opera
-        ];
-        browsers_display_names = [
-            "Firefox Private",
-            "Firefox",
-            "Chrome",
-            "Edge",
-            "Waterfox",
-            "Vivaldi",
-            "Opera",
-        ];
+        // Use registry-based browser detection on Windows
+        let detected_browsers = get_installed_browsers_from_registry();
+
+        if detected_browsers.is_empty() {
+            // Fallback to common browsers if registry detection fails
+            println!("No browsers found in registry, using fallback list");
+            let fallback_browsers = [
+                ("firefox.exe", "Firefox"),
+                ("chrome.exe", "Chrome"),
+                ("msedge.exe", "Edge"),
+                ("iexplore.exe", "Internet Explorer"),
+            ];
+
+            for (command, display_name) in fallback_browsers.iter() {
+                prefstore::savepreference(appname, display_name.to_string(), command.to_string());
+            }
+        } else {
+            // Use detected browsers from registry
+            for (command, display_name) in detected_browsers {
+                prefstore::savepreference(appname, display_name, command);
+            }
+        }
     }
+
     #[cfg(target_os = "linux")] {
-        browsers_commands = [
+        // Linux browser commands
+        let browsers_commands = [
             "firefox --private-window",
             "firefox",
             "google-chrome",
@@ -119,7 +121,7 @@ fn reinit(){
             "vivaldi-stable",
             "opera",
         ];
-        browsers_display_names = [
+        let browsers_display_names = [
             "Firefox Private",
             "Firefox",
             "Chrome",
@@ -128,26 +130,35 @@ fn reinit(){
             "Vivaldi",
             "Opera",
         ];
+
+        // Save browser preferences
+        for (i, command) in browsers_commands.iter().enumerate() {
+            if let Some(display_name) = browsers_display_names.get(i) {
+                prefstore::savepreference(appname, display_name.to_string(), *command);
+            }
+        }
     }
+
     #[cfg(target_os = "macos")] {
-        browsers_commands = [
+        // macOS browser commands
+        let browsers_commands = [
             "open -a Firefox --args --private-window",
             "open -a Firefox --args",
             "open -a 'Google Chrome' --args",
             "open -a Safari --args",
         ];
-        browsers_display_names = [
+        let browsers_display_names = [
             "Firefox Private",
             "Firefox",
             "Chrome",
             "Safari",
         ];
-    }
 
-    // Save browser preferences
-    for (i, command) in browsers_commands.iter().enumerate() {
-        if let Some(display_name) = browsers_display_names.get(i) {
-            prefstore::savepreference(appname, display_name.to_string(), *command);
+        // Save browser preferences
+        for (i, command) in browsers_commands.iter().enumerate() {
+            if let Some(display_name) = browsers_display_names.get(i) {
+                prefstore::savepreference(appname, display_name.to_string(), *command);
+            }
         }
     }
 
@@ -183,6 +194,59 @@ fn get_exe_path() -> Result<String, Box<dyn Error + Send + Sync + 'static>> {
     use std::env;
     let current_exe = env::current_exe()?;
     Ok(current_exe.to_string_lossy().to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn get_installed_browsers_from_registry() -> Vec<(String, String)> {
+    let mut browsers = Vec::new();
+
+    // Try HKLM first (system-wide installations)
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    if let Ok(clients_key) = hklm.open_subkey("SOFTWARE\\Clients\\StartMenuInternet") {
+        for browser_key_result in clients_key.enum_keys() {
+            if let Ok(browser_key_name) = browser_key_result {
+                if let Ok(browser_key) = clients_key.open_subkey(&browser_key_name) {
+                    // Get display name
+                    let display_name = browser_key.get_value("")
+                        .unwrap_or_else(|_| browser_key_name.clone());
+
+                    // Get command from shell/open/command
+                    if let Ok(shell_key) = browser_key.open_subkey("shell\\open\\command") {
+                        if let Ok(command) = shell_key.get_value("") {
+                            browsers.push((command, display_name));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Try HKCU (user-specific installations)
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(clients_key) = hkcu.open_subkey("SOFTWARE\\Clients\\StartMenuInternet") {
+        for browser_key_result in clients_key.enum_keys() {
+            if let Ok(browser_key_name) = browser_key_result {
+                if let Ok(browser_key) = clients_key.open_subkey(&browser_key_name) {
+                    // Get display name
+                    let display_name = browser_key.get_value("")
+                        .unwrap_or_else(|_| browser_key_name.clone());
+
+                    // Get command from shell/open/command
+                    if let Ok(shell_key) = browser_key.open_subkey("shell\\open\\command") {
+                        if let Ok(command) = shell_key.get_value("") {
+                            // Avoid duplicates
+                            let command_str = command;
+                            if !browsers.iter().any(|(existing_cmd, _)| existing_cmd == &command_str) {
+                                browsers.push((command_str, display_name));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    browsers
 }
 
 #[cfg(target_os = "windows")]
