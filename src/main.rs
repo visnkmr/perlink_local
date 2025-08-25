@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"]
 #[allow(warnings)]
 use std::{env,rc, process::{self, ExitCode}};
 use opentelemetry::{trace::{TraceError, Tracer, TraceContextExt, FutureExt, SpanKind, Span, get_active_span}, sdk::{trace::Config, Resource, propagation::TraceContextPropagator}, KeyValue, global, Key, Context};
@@ -77,6 +77,14 @@ struct MyConfig {
 fn appendfile(browsername:String,browsercommand:String){
     prefstore::savepreference(appname, browsername,browsercommand);
     }
+
+
+#[test]
+fn init_try(){
+    reinit();
+}
+
+
 fn reinit(){
     // Clear existing preferences first
     if let Ok(existing_browsers) = prefstore::getall(appname) {
@@ -105,7 +113,8 @@ fn reinit(){
         } else {
             // Use detected browsers from registry
             for (command, display_name) in detected_browsers {
-                prefstore::savepreference(appname, display_name, command.trim_matches('"'));
+                // println!("{}------{}",display_name,command.trim_matches('"'));
+                prefstore::savepreference(appname, display_name, command.trim_matches('"').to_string());
             }
         }
     }
