@@ -45,7 +45,26 @@ opentelemetry-jaeger = "0.16.0"
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.52"
 
+# Build dependencies for Windows icon
+[target.'cfg(target_os = "windows")'.build-dependencies]
+winres = "0.1"
+
 [package.metadata.bundle]
 name = "perlink"
 identifier = "visnk.perlink"
-#description = "perlink"
+description = "A browser chooser application for selecting which browser to open URLs with"
+
+# Icons for different platforms
+icon = ["perlink.ico", "perlink.png"]
+
+# Windows-specific bundle settings
+[package.metadata.bundle.windows]
+icon = "perlink.ico"
+
+# macOS-specific bundle settings
+[package.metadata.bundle.macos]
+icon = "perlink.icns"
+
+# Linux-specific bundle settings
+[package.metadata.bundle.linux]
+icon = "perlink.png"
