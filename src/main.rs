@@ -190,29 +190,83 @@ fn register_protocol_handler() -> Result<(), Box<dyn Error + Send + Sync + 'stat
     let exe_path = get_exe_path()?;
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
-    // Register the application
-    let (app_key, _) = hkcu.create_subkey("Software\\Classes\\perlink")?;
-    app_key.set_value("", &"URL:perlink Protocol")?;
-    app_key.set_value("URL Protocol", &"")?;
+    // Get just the filename (e.g., "perlink.exe") for application registration
+    let exe_name = std::path::Path::new(&exe_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("perlink.exe");
 
-    let (shell_key, _) = app_key.create_subkey("shell\\open\\command")?;
-    shell_key.set_value("", &format!("\"{}\" \"%1\"", exe_path))?;
+    // Define ProgID for the application
+    let prog_id = "Perlink.URLHandler";
 
-    // Register for http protocol
-    let (http_key, _) = hkcu.create_subkey("Software\\Classes\\http\\shell\\open\\command")?;
-    http_key.set_value("", &format!("\"{}\" \"%1\"", exe_path))?;
+    // Step 1: Define your app's ProgID
+    let (progid_key, _) = hkcu.create_subkey(&format!("Software\\Classes\\{}", prog_id))?;
+    progid_key.set_value("", &"Perlink Browser Chooser")?;
+    progid_key.set_value("URL Protocol", &"")?;
 
-    // Register for https protocol
-    let (https_key, _) = hkcu.create_subkey("Software\\Classes\\https\\shell\\open\\command")?;
-    https_key.set_value("", &format!("\"{}\" \"%1\"", exe_path))?;
+    // Register the command for the ProgID
+    let (progid_shell_key, _) = progid_key.create_subkey("shell\\open\\command")?;
+    progid_shell_key.set_value("", &format!("\"{}\" \"%1\"", exe_path))?;
 
-    println!("Protocol handler registered successfully!");
+    // Step 2: Register your app under RegisteredApplications
+    let (reg_apps_key, _) = hkcu.create_subkey("Software\\RegisteredApplications")?;
+    reg_apps_key.set_value("Perlink", &format!("Software\\Perlink\\Capabilities"))?;
+
+    // Step 3: Define your app's capabilities
+    let (capabilities_key, _) = hkcu.create_subkey("Software\\Perlink\\Capabilities")?;
+    capabilities_key.set_value("ApplicationName", &"Perlink Browser Chooser")?;
+    capabilities_key.set_value("ApplicationDescription", &"A browser chooser application for selecting which browser to open URLs with")?;
+
+    // Register supported URL protocols
+    let (url_protocols_key, _) = capabilities_key.create_subkey("UrlAssociations")?;
+    url_protocols_key.set_value("http", &prog_id)?;
+    url_protocols_key.set_value("https", &prog_id)?;
+
+    // Step 4: Associate your app with http (and optionally https) protocols
+    // This is done through the capabilities registration above
+
+    // Step 5: Provide a command to launch your app with the URL
+    // This is done in the ProgID command registration above
+
+    // Register the application in Applications section for additional compatibility
+    let (app_reg_key, _) = hkcu.create_subkey(&format!("Software\\Classes\\Applications\\{}", exe_name))?;
+    app_reg_key.set_value("", &"Perlink Browser Chooser")?;
+
+    // Register supported protocols for the application (legacy support)
+    let (protocols_key, _) = app_reg_key.create_subkey("SupportedTypes")?;
+    protocols_key.set_value("http", &"")?;
+    protocols_key.set_value("https", &"")?;
+
+    // Register the command for the application (legacy support)
+    let (app_shell_key, _) = app_reg_key.create_subkey("shell\\open\\command")?;
+    app_shell_key.set_value("", &format!("\"{}\" \"%1\"", exe_path))?;
+
+    // Register the custom perlink protocol
+    let (perlink_key, _) = hkcu.create_subkey("Software\\Classes\\perlink")?;
+    perlink_key.set_value("", &"URL:perlink Protocol")?;
+    perlink_key.set_value("URL Protocol", &"")?;
+
+    let (perlink_shell_key, _) = perlink_key.create_subkey("shell\\open\\command")?;
+    perlink_shell_key.set_value("", &format!("\"{}\" \"%1\"", exe_path))?;
+
+    println!("Protocol handler registered successfully using proper Windows registration method!");
+    println!("Perlink should now appear in the list of available applications for HTTP/HTTPS protocols.");
     Ok(())
 }
 
 #[cfg(target_os = "windows")]
 fn unregister_protocol_handler() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+
+    // Get executable path to determine the application name
+    let exe_path = get_exe_path().unwrap_or_else(|_| "perlink.exe".to_string());
+    let exe_name = std::path::Path::new(&exe_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("perlink.exe");
+
+    // Remove application registration
+    let _ = hkcu.delete_subkey_all(&format!("Software\\Classes\\Applications\\{}", exe_name));
 
     // Remove protocol associations
     let _ = hkcu.delete_subkey_all("Software\\Classes\\http\\shell\\open\\command");
