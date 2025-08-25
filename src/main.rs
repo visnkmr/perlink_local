@@ -105,7 +105,7 @@ fn reinit(){
         } else {
             // Use detected browsers from registry
             for (command, display_name) in detected_browsers {
-                prefstore::savepreference(appname, display_name, command);
+                prefstore::savepreference(appname, display_name, command.trim_matches('"'));
             }
         }
     }
@@ -197,14 +197,30 @@ fn get_exe_path() -> Result<String, Box<dyn Error + Send + Sync + 'static>> {
 }
 
 #[cfg(target_os = "windows")]
+#[test]
+fn getbrowsers(){
+    println!("Testing browser detection functionality...");
+    println!("hello");
+    let browsers = get_installed_browsers_from_registry();
+    println!("Test completed. Found browsers: {:?}", browsers);
+
+    // Additional test output
+    for (command, display_name) in &browsers {
+        println!("Browser: {} -> {}", display_name, command.trim_matches('"'));
+    }
+}
+#[cfg(target_os = "windows")]
 fn get_installed_browsers_from_registry() -> Vec<(String, String)> {
     let mut browsers = Vec::new();
+    println!("Starting browser detection from Windows registry...");
 
     // Try HKLM first (system-wide installations)
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     if let Ok(clients_key) = hklm.open_subkey("SOFTWARE\\Clients\\StartMenuInternet") {
+        println!("Checking HKEY_LOCAL_MACHINE for browsers...");
         for browser_key_result in clients_key.enum_keys() {
             if let Ok(browser_key_name) = browser_key_result {
+                println!("Found browser key: {}", browser_key_name);
                 if let Ok(browser_key) = clients_key.open_subkey(&browser_key_name) {
                     // Get display name
                     let display_name = browser_key.get_value("")
@@ -213,19 +229,24 @@ fn get_installed_browsers_from_registry() -> Vec<(String, String)> {
                     // Get command from shell/open/command
                     if let Ok(shell_key) = browser_key.open_subkey("shell\\open\\command") {
                         if let Ok(command) = shell_key.get_value("") {
+                            println!("Found browser: {} -> {}", display_name, command);
                             browsers.push((command, display_name));
                         }
                     }
                 }
             }
         }
+    } else {
+        println!("Could not access HKEY_LOCAL_MACHINE\\SOFTWARE\\Clients\\StartMenuInternet");
     }
 
     // Try HKCU (user-specific installations)
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     if let Ok(clients_key) = hkcu.open_subkey("SOFTWARE\\Clients\\StartMenuInternet") {
+        println!("Checking HKEY_CURRENT_USER for browsers...");
         for browser_key_result in clients_key.enum_keys() {
             if let Ok(browser_key_name) = browser_key_result {
+                println!("Found browser key: {}", browser_key_name);
                 if let Ok(browser_key) = clients_key.open_subkey(&browser_key_name) {
                     // Get display name
                     let display_name = browser_key.get_value("")
@@ -237,15 +258,21 @@ fn get_installed_browsers_from_registry() -> Vec<(String, String)> {
                             // Avoid duplicates
                             let command_str = command;
                             if !browsers.iter().any(|(existing_cmd, _)| existing_cmd == &command_str) {
+                                println!("Found browser: {} -> {}", display_name, command_str);
                                 browsers.push((command_str, display_name));
+                            } else {
+                                println!("Skipping duplicate browser: {} -> {}", display_name, command_str);
                             }
                         }
                     }
                 }
             }
         }
+    } else {
+        println!("Could not access HKEY_CURRENT_USER\\SOFTWARE\\Clients\\StartMenuInternet");
     }
 
+    println!("Browser detection completed. Found {} browsers.", browsers.len());
     browsers
 }
 
