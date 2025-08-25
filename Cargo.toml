@@ -15,6 +15,10 @@ description = "perlink"
 [dependencies]
 eframe = "0.25.0"
 egui = "0.25.0"
+egui_extras = "0.25.0"
+image = "0.24"
+reqwest = { version = "0.11", features = ["blocking"] }
+tokio = { version = "1.0", features = ["full"] }
 dotenv = "0.15.0"
 # app-center = { git = "https://github.com/jeff-hiner/appcenter-rs" }
 human-panic = { git = "https://github.com/visnkmr/save-crash-logs-rs" }
@@ -32,7 +36,7 @@ arboard = { default-features = false, version = "3.2.0" }
 indexmap = { version = "1.9.3", features = ["serde"] }
 # opentelemetry = { version="0.16", features = ["serialize", "rt-tokio"] }
 # opentelemetry-jaeger = { version="0.15", features = ["rt-tokio"] }
-tokio = { version = "1.28.2", features = ["full","tracing"] }
+# tokio already defined below with features
 # opentelemetry-http="0.8.0"
 tracing="0.1.37"
 tracing-subscriber="0.3.17"

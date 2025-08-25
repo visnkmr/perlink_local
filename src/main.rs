@@ -12,7 +12,8 @@ extern crate linkify;
 use linkify::{LinkFinder, LinkKind};
 // use std::option::Option;
 use eframe::egui;
-use egui::{RichText, FontId, Key};
+use egui::{RichText, FontId, Key, Vec2};
+use egui_extras::RetainedImage;
 
 use serde::{Deserialize, Serialize};
 use std::{process::{Command,Stdio}, error::Error, time::Duration, thread};
@@ -20,7 +21,6 @@ use std::{process::{Command,Stdio}, error::Error, time::Duration, thread};
 
 use isahc::prelude::*;
 // extern crate preferences;
-use std::collections::HashMap;
 // use abserde::*;
 
 use std::fs::create_dir_all;
@@ -468,8 +468,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
 fn launch_gui(initial_url: Option<String>) {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([400.0, 600.0])
-            .with_title("Choose browser"),
+            .with_inner_size([500.0, 700.0]) // Larger window to fit bigger buttons
+            .with_title("Choose Browser"),
         ..Default::default()
     };
 
@@ -491,6 +491,7 @@ struct PerlinkApp {
     window_title_urls: Vec<String>,
     clipboard_urls: Vec<String>,
     browsers: Vec<(String, String)>, // (display_name, command)
+    app_icon: Option<RetainedImage>, // Local app icon loaded with egui_extras
 }
 
 impl PerlinkApp {
@@ -502,10 +503,16 @@ impl PerlinkApp {
             window_title_urls: Vec::new(),
             clipboard_urls: Vec::new(),
             browsers: Vec::new(),
+            app_icon: None,
         };
 
         // Initialize browsers
         app.load_browsers();
+
+        // Load local app icon using egui_extras
+        app.load_app_icon();
+
+        // Icons are loaded directly from URIs in the UI
 
         // Set initial URL if provided
         if let Some(url) = initial_url {
@@ -577,30 +584,61 @@ impl PerlinkApp {
         }
     }
 
-    fn get_browser_icon(&self, display_name: &str) -> &'static str {
+    fn get_browser_icon_url(&self, display_name: &str) -> String {
         let name_lower = display_name.to_lowercase();
+
+        // Use Google's favicon service to get actual browser website icons
         if name_lower.contains("firefox") {
-            "🦊" // Firefox icon
+            "https://www.google.com/s2/favicons?domain=firefox.com&sz=128".to_string()
         } else if name_lower.contains("chrome") {
-            "🌐" // Chrome icon
+            "https://www.google.com/s2/favicons?domain=google.com&sz=32".to_string()
         } else if name_lower.contains("edge") {
-            "🔷" // Edge icon
+            "https://www.google.com/s2/favicons?domain=microsoft.com&sz=32".to_string()
         } else if name_lower.contains("safari") {
-            "🧭" // Safari icon
+            "https://www.google.com/s2/favicons?domain=apple.com&sz=32".to_string()
         } else if name_lower.contains("opera") {
-            "🎭" // Opera icon
+            "https://www.google.com/s2/favicons?domain=opera.com&sz=32".to_string()
         } else if name_lower.contains("vivaldi") {
-            "🎨" // Vivaldi icon
+            "https://www.google.com/s2/favicons?domain=vivaldi.com&sz=32".to_string()
         } else if name_lower.contains("brave") {
-            "🛡️" // Brave icon
+            "https://www.google.com/s2/favicons?domain=brave.com&sz=32".to_string()
         } else if name_lower.contains("waterfox") {
-            "🌊" // Waterfox icon
+            "https://www.google.com/s2/favicons?domain=waterfox.net&sz=32".to_string()
         } else if name_lower.contains("chromium") {
-            "⚙️" // Chromium icon
+            "https://www.google.com/s2/favicons?domain=chromium.org&sz=32".to_string()
         } else {
-            "🌐" // Generic browser icon
+            // Generic web browser icon
+            "https://www.google.com/s2/favicons?domain=browser.com&sz=32".to_string()
         }
     }
+
+    // Load local app icon using egui_extras RetainedImage
+    fn load_app_icon(&mut self) {
+        // Try to load the perlink_scr.png from the current directory
+        if let Ok(image_bytes) = std::fs::read("perlink_scr.png") {
+            // Use the image crate to decode the PNG
+            if let Ok(image) = image::load_from_memory(&image_bytes) {
+                let rgba_image = image.to_rgba8();
+                let size = [rgba_image.width() as usize, rgba_image.height() as usize];
+                let pixels = rgba_image.into_raw();
+
+                // Create a ColorImage from the raw pixels
+                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &pixels);
+
+                // Create RetainedImage from ColorImage
+                let retained_image = RetainedImage::from_color_image("perlink_icon", color_image);
+                self.app_icon = Some(retained_image);
+            } else {
+                eprintln!("Failed to decode perlink_scr.png as image");
+            }
+        } else {
+            eprintln!("Could not read perlink_scr.png file");
+        }
+    }
+
+    // Icons are loaded directly from URIs in the UI using egui::Image::from_uri
+
+    // No longer needed - using direct image loading
 }
 
 impl eframe::App for PerlinkApp {
@@ -612,6 +650,13 @@ impl eframe::App for PerlinkApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| {
+                // Display app icon if loaded
+                if let Some(icon) = &self.app_icon {
+                    ui.add_space(10.0);
+                    icon.show_size(ui, Vec2::new(64.0, 64.0));
+                    ui.add_space(10.0);
+                }
+
                 // URL display
                 ui.add_space(20.0);
                 ui.label(RichText::new(&self.current_url.chars().take(40).collect::<String>()).font(FontId::proportional(12.0)));
@@ -633,16 +678,23 @@ impl eframe::App for PerlinkApp {
                 ui.add_space(10.0);
 
                 // Browser list with icons
-                ui.label("Available browsers:");
-                ui.horizontal_wrapped(|ui| {
-                    for (display_name, _) in &self.browsers {
-                        let icon = self.get_browser_icon(display_name);
-                        let browser_text = format!("{} {}", icon, display_name);
-                        ui.label(RichText::new(&browser_text).font(FontId::proportional(10.0)));
-                    }
-                });
+                // ui.label("Available browsers:");
+                // ui.horizontal_wrapped(|ui| {
+                //     for (display_name, _) in &self.browsers {
+                //         ui.horizontal(|ui| {
+                //             // Load and show icon from Google favicon API
+                //             let icon_url = self.get_browser_icon_url(display_name);
+                //             let image = egui::Image::from_uri(icon_url)
+                //                 .fit_to_exact_size(Vec2::new(16.0, 16.0))
+                //                 .rounding(2.0);
+                //             ui.add(image);
 
-                ui.add_space(10.0);
+                //             ui.label(RichText::new(display_name).font(FontId::proportional(10.0)));
+                //         });
+                //     }
+                // });
+
+                // ui.add_space(10.0);
 
                 // Action buttons row
                 ui.horizontal(|ui| {
@@ -687,30 +739,45 @@ impl eframe::App for PerlinkApp {
 
                 ui.add_space(20.0);
 
-                // Browser buttons in grid layout
-                ui.label("Choose browser:");
-                let browsers_per_row = 3;
+                // Centered browser buttons with larger size
+                ui.add_space(20.0);
                 let mut clicked_browser = None;
 
-                for (i, (display_name, command)) in self.browsers.iter().enumerate() {
-                    let button_text: String = display_name.chars().take(10).collect();
+                ui.vertical_centered(|ui| {
+                    ui.heading("Choose Browser");
+                    ui.add_space(15.0);
 
-                    if i % browsers_per_row == 0 {
-                        ui.horizontal(|ui| {
-                            for j in 0..browsers_per_row {
-                                let idx = i + j;
-                                if idx < self.browsers.len() {
-                                    let (btn_name, cmd) = &self.browsers[idx];
-                                    let icon = self.get_browser_icon(btn_name);
-                                    let btn_text = format!("{} {}", icon, btn_name.chars().take(10).collect::<String>());
-                                    if ui.button(&btn_text).clicked() {
-                                        clicked_browser = Some(cmd.clone());
+                    let browsers_per_row = 3; // Reduced to 2 per row for bigger buttons
+
+                    for (i, (display_name, command)) in self.browsers.iter().enumerate() {
+                        if i % browsers_per_row == 0 {
+                            // Use centered layout for each row of buttons
+                            ui.horizontal(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 10.0; // Add spacing between buttons
+                                    for j in 0..browsers_per_row {
+                                        let idx = i + j;
+                                        if idx < self.browsers.len() {
+                                            let (btn_name, cmd) = &self.browsers[idx];
+                                            let btn_text = btn_name.chars().take(15).collect::<String>(); // Allow longer names
+
+                                            // Create larger, more prominent buttons
+                                            let button = egui::Button::new(RichText::new(&btn_text).font(FontId::proportional(16.0)))
+                                                .min_size(Vec2::new(140.0, 50.0)) // Larger button size
+                                                .stroke(egui::Stroke::new(1.5, egui::Color32::from_rgb(100, 150, 200)))
+                                                .rounding(8.0);
+
+                                            if ui.add(button).clicked() {
+                                                clicked_browser = Some(cmd.clone());
+                                            }
+                                        }
                                     }
-                                }
-                            }
-                        });
+                                });
+                                ui.add_space(20.0);
+                            });
+                        }
                     }
-                }
+                });
 
                 if let Some(cmd) = clicked_browser {
                     self.open_in_browser(&cmd, &self.current_url);
