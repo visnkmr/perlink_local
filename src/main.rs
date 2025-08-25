@@ -1,7 +1,7 @@
 #![windows_subsystem = "windows"]
 #[allow(warnings)]
 use std::{env,rc, process::{self, ExitCode}};
-use opentelemetry::{trace::{TraceError, Tracer, TraceContextExt, FutureExt, SpanKind, Span, get_active_span}, sdk::{trace::Config, Resource, propagation::TraceContextPropagator}, KeyValue, global, Key, Context};
+use opentelemetry::{trace::{TraceError, Tracer, TraceContextExt, FutureExt, SpanKind, Span, get_active_span}, sdk::{trace::Config, Resource, propagation::TraceContextPropagator}, KeyValue, global, Key as OtelKey, Context};
 use tracing::{info, span, log::warn, trace};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, fmt, util::SubscriberInitExt};
 use window_titles::{Connection, ConnectionTrait};
@@ -11,17 +11,8 @@ extern crate linkify;
 // mod log;
 use linkify::{LinkFinder, LinkKind};
 // use std::option::Option;
-use fltk::{
-    enums::{Color, FrameType, Event, CallbackTrigger},
-    app::MouseButton,
-    app::{App,*},
-    prelude::{DisplayExt, GroupExt, WidgetBase, WidgetExt},
-    text::{TextBuffer, TextDisplay},
-    window::Window,
-    button::{Button,CheckButton},
-   input::Input,
-    prelude::*, frame::Frame,
-};
+use eframe::egui;
+use egui::{RichText, FontId, Key};
 
 use serde::{Deserialize, Serialize};
 use std::{process::{Command,Stdio}, error::Error, time::Duration, thread};
@@ -393,8 +384,6 @@ fn unregister_protocol_handler() -> Result<(), Box<dyn Error + Send + Sync + 'st
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
     dotenv().ok();
     // construct a subscriber that prints formatted traces to stdout
-    // let subscriber = 
-    // tracing_subscriber::FmtSubscriber::new();
     let tracer = opentelemetry_jaeger::new_pipeline()
         .with_service_name("perlink_main")
         .install_simple()?;
@@ -402,554 +391,352 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
 
     tracing_subscriber::registry()
         .with(opentelemetry)
-        // Continue logging to stdout
         .with(fmt::Layer::default())
         .try_init()?;
+
     span!(tracing::Level::INFO, "init_started")
         .in_scope(||{
-    
-    let root = span!(tracing::Level::INFO, "init_setup", work_units = 2);
-    info!("setup_crashreporting");
-    // let ac_key = env::var("APPCENTER_KEY").unwrap();
-    // app_center::start!(ac_key);
-    human_panic::setup_panic!(human_panic::Metadata {
-        version: env!("CARGO_PKG_VERSION").into(),
-        name: env!("CARGO_PKG_NAME").into(),
-        authors: env!("CARGO_PKG_AUTHORS").replace(":", ", ").into(),
-        homepage: env!("CARGO_PKG_HOMEPAGE").into(),
-        path_to_save_log_to: prefstore::prefstore_directory(&appname.to_string()).unwrap(),
-    });
-    // let my_abserde = Abserde {
-    //     app: appname.to_string(),
-    //     location: Location::Auto,
-    //     format: Format::Toml,
-    // };
-    info!("check_for_init_args");
+            let root = span!(tracing::Level::INFO, "init_setup", work_units = 2);
+            info!("setup_crashreporting");
+            human_panic::setup_panic!(human_panic::Metadata {
+                version: env!("CARGO_PKG_VERSION").into(),
+                name: env!("CARGO_PKG_NAME").into(),
+                authors: env!("CARGO_PKG_AUTHORS").replace(":", ", ").into(),
+                homepage: env!("CARGO_PKG_HOMEPAGE").into(),
+                path_to_save_log_to: prefstore::prefstore_directory(&appname.to_string()).unwrap(),
+            });
+            info!("check_for_init_args");
 
-    let args: Vec<String> = env::args().collect();
-    match args.get(1) {
-
-        Some(val) => match val {
-            val => {
-                println!("{}----------->",val);
-
-                if val == "reinit"{
-                    // let mut initspan=global::tracer("perlink").start("initconfig");
-                    info!("reinit");
-                    println!("Reinitilizing config file.");
-                    reinit();
-                    // initspan.end();
-                    process::exit(0);
-
-                }if val == "add"{
-                    info!("add_browser");
-                    println!("Added new browser.");
-                    appendfile(args.get(2).unwrap().to_string(),args.get(3).unwrap().to_string());
-                    process::exit(0);
-
-                }
-                if val == "clear"{
-                    info!("clear_browser_list");
-                    println!("Cleared browser list.");
-                    prefstore::clearall(appname,"txt");
-                    process::exit(0);
-
-                }
-                if val == "install"{
-                    info!("install_protocol_handler");
-                    println!("Installing protocol handler...");
-                    if let Err(e) = register_protocol_handler() {
-                        eprintln!("Failed to install protocol handler: {}", e);
-                        process::exit(1);
-                    }
-                    process::exit(0);
-
-                }
-                if val == "uninstall"{
-                    info!("uninstall_protocol_handler");
-                    println!("Uninstalling protocol handler...");
-                    if let Err(e) = unregister_protocol_handler() {
-                        eprintln!("Failed to uninstall protocol handler: {}", e);
-                        process::exit(1);
-                    }
-                    process::exit(0);
-
-                }
-                // Check if it's a URL (starts with http:// or https://)
-                if val.starts_with("http://") || val.starts_with("https://") {
-                    // It's a URL from protocol handler, continue to GUI
-                    info!("url_from_protocol_handler");
-                } else {
-                    // Unknown command
-                    println!("Unknown command: {}", val);
-                    println!("Available commands: reinit, add, clear, install, uninstall");
-                    process::exit(1);
-                }
-            }
-            _ =>{
-
-            },
-            // Message::Stop => rlist(),
-        },
-        None => {
-
-        },
-    }
-    
-    
-    let mut WIDGET_PADDING: i32 = 20;
-    let mut WIDGET_WIDTH: i32 = 400;
-
-    // Dynamic window height calculation based on number of installed browsers
-    // This ensures the window fits all browser buttons comfortably
-    let browser_count = prefstore::getall(appname).unwrap_or(vec![(String::new(),String::new())]).len() as i32;
-    let browsers_per_row = 3; // Browser buttons are arranged in rows of 3
-    let button_height = 40; // Height of each browser button
-    let button_spacing = 5; // Spacing between button rows
-
-    // Calculate how many rows of browsers we need
-    let browser_rows = if browser_count > 0 {
-        ((browser_count as f32) / (browsers_per_row as f32)).ceil() as i32
-    } else {
-        1 // minimum 1 row even if no browsers
-    };
-
-    // Calculate space needed for different UI sections:
-    let header_section_height = 70; // URL frame + expand button + all browsers button
-    let action_buttons_height = 70; // share via web + copy to clipboard buttons
-    let browser_section_height = browser_rows * button_height + (browser_rows - 1) * button_spacing;
-    let padding_and_spacing = WIDGET_PADDING * 4 + 60; // padding + frame spacing
-
-    let mut WIDGET_HEIGHT: i32 = header_section_height + action_buttons_height + browser_section_height + padding_and_spacing;
-
-    // Set reasonable min/max window heights
-    if WIDGET_HEIGHT < 350 {
-        WIDGET_HEIGHT = 350; // Minimum usable height
-    } else if WIDGET_HEIGHT > 800 {
-        WIDGET_HEIGHT = 800; // Maximum height to keep window manageable
-    }
-
-    println!("Dynamic window sizing: {} browsers -> {} rows -> {}px height", browser_count, browser_rows, WIDGET_HEIGHT);
-    let args: Vec<String> = env::args().collect();
-    let mut expandedurl = "".to_string();
-    let mut ourl = "".to_string();
-    // let mut sourl = std::rc::Rc::new(std::cell::RefCell::new(String::new()));
-    // let mut sourl= vars{jas:"".to_string()};
-    
-    let mut strtoshow="";
-    
-
-    // let mut ourl = args.get(1).unwrap().to_string() ;
-    // expandedurl = sk;
-    // let (s, r) = fltk::app::channel();
-    drop(root);
-    let root = span!(tracing::Level::INFO, "loading_ui", work_units = 2);
-
-            let mut app = App::default();
-            
-            let mut win = Window::default().with_size(WIDGET_WIDTH, WIDGET_HEIGHT).with_label("Choose browser");
-            win.handle(move |f, ev|{
-                // println!("{}----->{}",ev,fltk::app::event_text());
-             match ev {
-                fltk::enums::Event::KeyDown => {
-                     if fltk::app::event_key() == fltk::enums::Key::from_char('f') {
-                        // win.fullscreen(!win.fullscreen_active());
-                    } else if fltk::app::event_key() == fltk::enums::Key::from_char('q') {
-                        fltk::app::quit();
-                    };
-        
-                    true
-                }
-                ,
-                 _ => {
-                     false
-                 }
-             }
-});
-let (s, r) = fltk::app::channel();
-
-           
-            let mut vpack=fltk::group::Pack::new(WIDGET_PADDING,
-                WIDGET_PADDING,
-                WIDGET_WIDTH - 40,
-                WIDGET_HEIGHT - 40,"");
-                win.resizable(&vpack);
-              
-                let mut framet = fltk::frame::Frame::default()
-                .with_size(800,60)
-                // .center_of(&win)
-                .with_label("Loading");
-              
-            framet.set_label_size(12);
-            let cfu = span!(tracing::Level::INFO, "get_url", work_units = 2);
+            let args: Vec<String> = env::args().collect();
             match args.get(1) {
                 Some(val) => match val {
-
                     val => {
-                        info!("Found_url_in_args");
+                        println!("{}----------->",val);
 
-                        expandedurl=val.to_string();
-                        ourl=val.to_string();
-                        setframe(&mut framet,&val);
-                        // rt.set_label("");
+                        if val == "reinit"{
+                            info!("reinit");
+                            println!("Reinitilizing config file.");
+                            reinit();
+                            process::exit(0);
+                        } else if val == "add"{
+                            info!("add_browser");
+                            println!("Added new browser.");
+                            appendfile(args.get(2).unwrap().to_string(),args.get(3).unwrap().to_string());
+                            process::exit(0);
+                        } else if val == "clear"{
+                            info!("clear_browser_list");
+                            println!("Cleared browser list.");
+                            prefstore::clearall(appname,"txt");
+                            process::exit(0);
+                        } else if val == "install"{
+                            info!("install_protocol_handler");
+                            println!("Installing protocol handler...");
+                            if let Err(e) = register_protocol_handler() {
+                                eprintln!("Failed to install protocol handler: {}", e);
+                                process::exit(1);
+                            }
+                            process::exit(0);
+                        } else if val == "uninstall"{
+                            info!("uninstall_protocol_handler");
+                            println!("Uninstalling protocol handler...");
+                            if let Err(e) = unregister_protocol_handler() {
+                                eprintln!("Failed to uninstall protocol handler: {}", e);
+                                process::exit(1);
+                            }
+                            process::exit(0);
+                        } else if val.starts_with("http://") || val.starts_with("https://") {
+                            info!("url_from_protocol_handler");
+                            // Launch GUI with URL
+                            launch_gui(Some(val.to_string()));
+                        } else {
+                            println!("Unknown command: {}", val);
+                            println!("Available commands: reinit, add, clear, install, uninstall");
+                            process::exit(1);
+                        }
                     }
-                    _ =>{
-                        info!("invalid_args");
-
-                        expandedurl=" ".to_string();
-                        ourl=" ".to_string();
-                        setframe(&mut framet,&"invalid url".to_string());
-                    },
-                    // Message::Stop => rlist(),
                 },
                 None => {
-                let cfu = span!(tracing::Level::INFO, "no_url_in_args", work_units = 2);
-
-                    expandedurl=" ".to_string();
-                    // let k=vars{jas:"".to_string()};
-                    ourl=" ".to_string();
-                    println!("here");
-                    info!("Checking_in_window_titles");
-
-                    let connection = Connection::new().unwrap();
-                    // let mut pref = HashMap::<String,String>::new();
-                    // let mut lks = vec!["", "New York"];
-                    // let mut links: Vec<_>=;
-                    for i in connection.window_titles().unwrap(){
-                        // println!("{}",i.to_lowercase());
-                        for kj in link_finder_str(&i){
-                            info!("found_window");
-                            let ss: String = kj.chars().skip(0).take(40).collect();
-                            let mut b = Button::default()
-                                    .with_size(70, 20)
-                                    .with_label(&ss)
-                                    // .with_align(Align::Left | Align::Inside)
-                                    ;
-                                    b.set_tooltip(&kj);
-                                    b.emit(s.clone(),kj);
-                                b.set_down_frame(FrameType::FlatBox);
-                                b.set_selection_color(Color::color_average(b.color(), Color::Foreground, 0.9));
-                                b.clear_visible_focus();
-                             
-                                b.set_frame(FrameType::FlatBox);
-           
-                        }
-                    }
-
-                    info!("Checking_in_clipboard");
-
-                    let mut clipboard = Clipboard::new().unwrap();
-                    match clipboard.get_text() {
-                    Ok(sk) => { 
-                        for kj in link_finder_str(&sk){
-                    info!("found_clip");
-
-                            let ss: String = kj.chars().skip(0).take(40).collect();
-                            let mut b = Button::default()
-                                .with_size(70, 20)
-                                .with_label(&ss);
-                            b.emit(s.clone(),kj.to_string());
-                            b.set_tooltip(&kj);
-                            b.set_down_frame(FrameType::FlatBox);
-                            b.set_selection_color(Color::color_average(b.color(), Color::Foreground, 0.9));
-                            b.clear_visible_focus();
-                            b.set_frame(FrameType::FlatBox);
-                        // println!("{}",kj);
-                        }
-                        
-                        // fltk::dialog::message(90, 90, &sk);{
-                            // let mut res = std::process::Command::new(format!("/home/roger/Downloads/waterfox/waterfox {}",sk)).output();
-                        // }
-                        
-                        // ... use sk ...
-                    },
-                    Err(e) => {
-                    info!("error_fetch_clipboard");
-
-                        println!("Error Clipboard");
-                        // setframe(&mut framet,"Error");
-                        // ... sk is not available, and e explains why ...
-                    },
-                }
-                drop(cfu);
-                                       
-                }
-                    
-            ,
-            }
-            
-            drop(cfu);
-            // println!("{}",ourl);
-                fltk::frame::Frame::default().with_size(20, 10);
-           
-            let mut ttb=fltk::group::Pack::default().with_size(
-                10,
-                40) ;
-                fltk::frame::Frame::default().with_size(20, 30);
-            
-            let mut eub = Button::default().with_size(150,30);
-            eub.set_label("expand url");
-            eub.emit(s.clone(),"expandurl".to_string());
-            
-            fltk::frame::Frame::default().with_size(20, 10);
-            // let mut bframe1 = fltk::frame::Frame::default().with_size(300, 60);
-            let mut b11 = Button::default().with_size(150,30);
-            b11.set_label("All browsers");
-            // b1.emit(s, "refresh".to_string());
-            // let mut hpack=hpack.clone();
-            b11.emit(s.clone(),"all".to_string());
-            
-
-            ttb.end();
-            ttb.set_type(fltk::group::PackType::Horizontal);
-            fltk::frame::Frame::default().with_size(10, 10);
-            let mut ttb=fltk::group::Pack::default().with_size(
-                10,
-                40) ;
-                
-                
-                fltk::frame::Frame::default().with_size(20, 30);
-            
-                let mut svw = Button::default().with_size(150,30);
-                svw.set_label("share via web");
-                svw.emit(s.clone(),"svw".to_string());
-                
-            
-            fltk::frame::Frame::default().with_size(20, 10);
-            // let mut bframe1 = fltk::frame::Frame::default().with_size(300, 60);
-            let mut svc = Button::default().with_size(150,30);
-                svc.set_label("copy to clipboard");
-                svc.emit(s.clone(),"svc".to_string());
-    
-
-            ttb.end();
-            ttb.set_type(fltk::group::PackType::Horizontal);
-            fltk::frame::Frame::default().with_size(20, 30);
-            let mut hpack=fltk::group::Pack::default().with_size(250,40) .center_of(&win);
-                // let i=0;
-
-                // browsers=browsers.clone();
-                let mut i=0;
-                // let mut bl:PreferencesMap<String> = setup();
-                if(prefstore::getall(appname).unwrap_or(vec![(String::new(),String::new())]).is_empty()){
-                    reinit();
-                }
-                
-                for (k,v) in prefstore::getall(appname).unwrap_or(vec![(String::new(),String::new())]) {
-                    let expandedurl=expandedurl.clone();
-                    fltk::frame::Frame::default().with_size(20, 10);
-                    let k: String = k.chars().skip(0).take(10).collect();
-                    // let cc = k.chars().count();
-                    // let sz=cc*9;
-                    // let mut b1 = Button::default().with_size(sz.try_into().unwrap(),60);
-                    let mut b1 = Button::default().with_size(90,60);
-                    
-                    b1.set_label(&format!("{}",k));
-                    b1.emit(s.clone(),v);
-                    
-                    i+=1;
-                    if(i%3 ==0){
-                        // println!("i value--------->{}",i);
-                        hpack.end();
-                    hpack.set_type(fltk::group::PackType::Horizontal);
-                    fltk::frame::Frame::default().with_size(20, 10);
-                    hpack=fltk::group::Pack::default().with_size(250,40) .center_of(&win);
-                    }
-                }
-                // let browsers = "";
-
-            hpack.end();
-            hpack.set_type(fltk::group::PackType::Horizontal);
-            win.make_resizable(true);
-            // win.resizable(&vpack);
-
-            vpack.end();    
-            vpack.set_type(fltk::group::PackType::Vertical);
-            
-            win.show_with_env_args();
-
-            win.end();
-            win.show();
-            drop(root);
-            span!(tracing::Level::INFO, "waiting_for_input")
-        .in_scope(|| {
-            info!("waiting for input");
-            // let mut frame1 =frame.clone();
-            // get_active_span(|span|async{
-                while app.wait() {
-                // setframe(&mut frame, "");
-                // frame=frame.clone();
-                match r.recv() {
-                    
-                    Some(val) => 
-                    match val {
-                        val => {
-                            // get_active_span(|span| {
-                            //     span.add_event("An event!".to_string(), vec![KeyValue::new("happened", true)]);
-                            // });
-                            
-                            // if(val == "frominput"){
-                            //             ourl=url.value();
-                            //     }
-                            // let mut str=val;
-                            if(val.contains("//")){
-                                info!("expanded_url");
-                                // let k= format!("{}",val);
-                                // frame.set_label(&k);
-                                setframe(&mut framet, &val);
-                                // println!("//------------->");
-
-                                // println!("{}",format!("{}",val));
-                            ourl=format!("{}",val);
-                            expandedurl=val;
-                            // rt.set_label("title");
-                            // frame.set_label("");
-                            // setframe(&mut frame,"");
-                            
-                            true;
-                            }
-                            else if val == "expandurl"{
-                                info!("expand_url");
-                                match eurl(ourl.clone()) {
-                                    Ok(sk) => { 
-                                        if(sk.to_lowercase().contains("invalid")){
-                                            setframe(&mut framet,args.get(1).unwrap());
-                                            // rt.set_label("");
-                                        }
-                                        else{
-                                            setframe(&mut framet, &sk);
-                                        }
-                                        
-                                        // fltk::dialog::message(90, 90, &sk);{
-                                            // let mut res = std::process::Command::new(format!("/home/roger/Downloads/waterfox/waterfox {}",sk)).output();
-                                        // }
-                                        
-                                        // ... use sk ...
-                                    },
-                                    Err(e) => {
-                                        setframe(&mut framet,"Error");
-                                        // ... sk is not available, and e explains why ...
-                                    },
-                                }
-                            }
-                            else if(val == "all"){
-                                // println!("all------------->");
-                                // span.add_event("opening".to_string(), vec![]);
-                                // if ourl==" "{
-                                //     ourl=url.value(); 
-                                info!("opening_in_all_browsers");
-                                let root = span!(tracing::Level::INFO, "opening_in_all", work_units = 2);
-                                //  }
-                                if(prefstore::getall(appname).unwrap_or(vec![(String::new(),String::new())]).is_empty()){
-                                    reinit();
-                                }
-                                let(hmap)=prefstore::getall(appname).unwrap_or(vec![(String::new(),String::new())]);
-                                
-    ;
-                            
-                                // let cx = Context::current();
-                                // let span = cx.span();
-                                // span.add_event("Opening in all browsers".to_string(), vec![]);
-                                // span.add_event("openinall".to_string(), vec![]);
-                                for (_,v) in hmap{
-
-                                        open(&v,&ourl);
-                                }
-                                drop(root);
-                                true;
-                            }
-                            else if(val == "svc"){
-                                info!("fromclipboard");
-                                let mut clipboard = Clipboard::new().unwrap();
-                                // println!("{}",&ourl);
-                                #[cfg(target_os = "linux")]{
-                                    clipboard.set().wait().text(&ourl).unwrap();
-                                }
-                                #[cfg(not(target_os = "linux"))]{
-                                    clipboard.set_text(&ourl).unwrap();
-                                }
-                                // clipboard.set_text("abc".to_string()).unwrap();
-                                // println!("{}",clipboard.get_text().unwrap());
-                            }else if(val == "svw"){
-                                // ada
-                            }
-                            // else 
-                            else{
-                                let root = span!(tracing::Level::INFO, "clicked", work_units = 2);
-                                info!("clicked_{val}");
-                                // if ourl==" "{
-                                //     ourl=url.value(); 
-                                //  }
-                                 
-                                // println!("{}------------->r{}r",val,expandedurl);
-    // let tracer = global::tracer("opentracer");
-
-                // span.add_event(val.to_string(), vec![]);
-
-                
-                            // let tracer = global::tracer("init");
-                            
-                            
-                            // let cx = Context::current();
-                            // let span = cx.span();
-                            // span.add_event("opening in browser".to_string(), vec![]);
-                                open(&val,&expandedurl);
-                                // .with_context(cx).await;
-                                // println!("opening----->{}",expandedurl);
-                                drop(root);
-                                
-                                fltk::app::quit();
-                                                true;
-                            }
-                            
-                            // frame.set_label(&val);
-                            
-                        },
-                        // Message::Stop => rlist(),
-                    },
-                    None => ({
-                        // println!("stop");
-                    })
-                }
-                
-                // let frame=win.frame.clone();
-                // frame.set_label("&val");
+                    // Launch GUI without URL
+                    launch_gui(None);
+                },
             }
         });
-            warn!("Exiting");
-        });
-            // .with_context(cx);
-            // });
-        // global::shutdown_tracer_provider();
-    process::exit(0);
-            // app.run().unwrap();    
-            Ok(())
-}
-#[cfg(target_os = "linux")]
-use arboard::SetExtLinux;
-const DAEMONIZE_ARG: &str = "__internal_daemonize";
 
-fn setframe(f:&mut Frame,s: &str){
-    let ss: String = s.chars().skip(0).take(40).collect();
-    f.set_label(&ss);
+    Ok(())
 }
-// async 
-fn open(v: &String,ourl: &String)->Result<(),()>{
+
+fn launch_gui(initial_url: Option<String>) {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([400.0, 600.0])
+            .with_title("Choose browser"),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "perlink",
+        options,
+        Box::new(|cc| {
+            let mut app = PerlinkApp::new(initial_url, cc);
+            Box::new(app)
+        }),
+    ).unwrap();
+}
+
+#[derive(Default)]
+struct PerlinkApp {
+    current_url: String,
+    expanded_url: String,
+    original_url: String,
+    window_title_urls: Vec<String>,
+    clipboard_urls: Vec<String>,
+    browsers: Vec<(String, String)>, // (display_name, command)
+}
+
+impl PerlinkApp {
+    fn new(initial_url: Option<String>, _cc: &eframe::CreationContext) -> Self {
+        let mut app = Self {
+            current_url: String::new(),
+            expanded_url: String::new(),
+            original_url: String::new(),
+            window_title_urls: Vec::new(),
+            clipboard_urls: Vec::new(),
+            browsers: Vec::new(),
+        };
+
+        // Initialize browsers
+        app.load_browsers();
+
+        // Set initial URL if provided
+        if let Some(url) = initial_url {
+            app.set_url(url);
+        } else {
+            app.detect_urls();
+        }
+
+        app
+    }
+
+    fn load_browsers(&mut self) {
+        if prefstore::getall(appname).unwrap_or(vec![]).is_empty() {
+            reinit();
+        }
+        self.browsers = prefstore::getall(appname).unwrap_or(vec![]);
+    }
+
+    fn set_url(&mut self, url: String) {
+        self.current_url = url.clone();
+        self.expanded_url = url.clone();
+        self.original_url = url;
+    }
+
+    fn detect_urls(&mut self) {
+        self.window_title_urls.clear();
+        self.clipboard_urls.clear();
+
+        // Detect URLs from window titles
+        let connection = Connection::new().unwrap();
+        for title in connection.window_titles().unwrap() {
+            for url in link_finder_str(&title) {
+                self.window_title_urls.push(url);
+            }
+        }
+
+        // Detect URLs from clipboard
+        if let Ok(mut clipboard) = Clipboard::new() {
+            if let Ok(text) = clipboard.get_text() {
+                for url in link_finder_str(&text) {
+                    self.clipboard_urls.push(url);
+                }
+            }
+        }
+    }
+
+    fn expand_url(&mut self) {
+        if let Ok(expanded) = eurl(self.original_url.clone()) {
+            if !expanded.to_lowercase().contains("invalid") {
+                self.set_url(expanded);
+            }
+        }
+    }
+
+    fn open_in_browser(&self, browser_command: &str, url: &str) {
+        if let Err(_) = open(&browser_command.to_string(), &url.to_string()) {
+            eprintln!("Failed to open URL in browser");
+        }
+    }
+
+    fn copy_to_clipboard(&self) {
+        if let Ok(mut clipboard) = Clipboard::new() {
+            #[cfg(target_os = "linux")] {
+                let _ = clipboard.set().wait().text(&self.current_url);
+            }
+            #[cfg(not(target_os = "linux"))] {
+                let _ = clipboard.set_text(&self.current_url);
+            }
+        }
+    }
+
+    fn get_browser_icon(&self, display_name: &str) -> &'static str {
+        let name_lower = display_name.to_lowercase();
+        if name_lower.contains("firefox") {
+            "🦊" // Firefox icon
+        } else if name_lower.contains("chrome") {
+            "🌐" // Chrome icon
+        } else if name_lower.contains("edge") {
+            "🔷" // Edge icon
+        } else if name_lower.contains("safari") {
+            "🧭" // Safari icon
+        } else if name_lower.contains("opera") {
+            "🎭" // Opera icon
+        } else if name_lower.contains("vivaldi") {
+            "🎨" // Vivaldi icon
+        } else if name_lower.contains("brave") {
+            "🛡️" // Brave icon
+        } else if name_lower.contains("waterfox") {
+            "🌊" // Waterfox icon
+        } else if name_lower.contains("chromium") {
+            "⚙️" // Chromium icon
+        } else {
+            "🌐" // Generic browser icon
+        }
+    }
+}
+
+impl eframe::App for PerlinkApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Handle keyboard shortcuts
+        if ctx.input(|i| i.key_pressed(Key::Q)) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.vertical_centered(|ui| {
+                // URL display
+                ui.add_space(20.0);
+                ui.label(RichText::new(&self.current_url.chars().take(40).collect::<String>()).font(FontId::proportional(12.0)));
+
+                ui.add_space(10.0);
+
+                // Top buttons row
+                ui.horizontal(|ui| {
+                    if ui.button("expand url").clicked() {
+                        self.expand_url();
+                    }
+                    if ui.button("All browsers").clicked() {
+                        for (_, command) in &self.browsers {
+                            self.open_in_browser(command, &self.current_url);
+                        }
+                    }
+                });
+
+                ui.add_space(10.0);
+
+                // Browser list with icons
+                ui.label("Available browsers:");
+                ui.horizontal_wrapped(|ui| {
+                    for (display_name, _) in &self.browsers {
+                        let icon = self.get_browser_icon(display_name);
+                        let browser_text = format!("{} {}", icon, display_name);
+                        ui.label(RichText::new(&browser_text).font(FontId::proportional(10.0)));
+                    }
+                });
+
+                ui.add_space(10.0);
+
+                // Action buttons row
+                ui.horizontal(|ui| {
+                    if ui.button("share via web").clicked() {
+                        // TODO: implement share via web
+                    }
+                    if ui.button("copy to clipboard").clicked() {
+                        self.copy_to_clipboard();
+                    }
+                });
+
+                ui.add_space(20.0);
+
+                // URL detection buttons
+                if !self.window_title_urls.is_empty() {
+                    ui.label("URLs from window titles:");
+                    let mut clicked_url = None;
+                    for url in &self.window_title_urls {
+                        let display_text: String = url.chars().take(40).collect();
+                        if ui.button(&display_text).on_hover_text(url).clicked() {
+                            clicked_url = Some(url.clone());
+                        }
+                    }
+                    if let Some(url) = clicked_url {
+                        self.set_url(url);
+                    }
+                }
+
+                if !self.clipboard_urls.is_empty() {
+                    ui.label("URLs from clipboard:");
+                    let mut clicked_url = None;
+                    for url in &self.clipboard_urls {
+                        let display_text: String = url.chars().take(40).collect();
+                        if ui.button(&display_text).on_hover_text(url).clicked() {
+                            clicked_url = Some(url.clone());
+                        }
+                    }
+                    if let Some(url) = clicked_url {
+                        self.set_url(url);
+                    }
+                }
+
+                ui.add_space(20.0);
+
+                // Browser buttons in grid layout
+                ui.label("Choose browser:");
+                let browsers_per_row = 3;
+                let mut clicked_browser = None;
+
+                for (i, (display_name, command)) in self.browsers.iter().enumerate() {
+                    let button_text: String = display_name.chars().take(10).collect();
+
+                    if i % browsers_per_row == 0 {
+                        ui.horizontal(|ui| {
+                            for j in 0..browsers_per_row {
+                                let idx = i + j;
+                                if idx < self.browsers.len() {
+                                    let (btn_name, cmd) = &self.browsers[idx];
+                                    let icon = self.get_browser_icon(btn_name);
+                                    let btn_text = format!("{} {}", icon, btn_name.chars().take(10).collect::<String>());
+                                    if ui.button(&btn_text).clicked() {
+                                        clicked_browser = Some(cmd.clone());
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+
+                if let Some(cmd) = clicked_browser {
+                    self.open_in_browser(&cmd, &self.current_url);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            });
+        });
+    }
+}
+
+// async
+fn open(v: &String, ourl: &String) -> Result<(), ()> {
     let root = span!(tracing::Level::INFO, "opening_browser", work_units = 2);
-   
 
-    let strings:Vec<String> = v.split_whitespace().map(str::to_string).collect();
-    let mut res = Command::new(format!("{}",strings[0]));
+    let strings: Vec<String> = v.split_whitespace().map(str::to_string).collect();
+    let mut res = Command::new(format!("{}", strings[0]));
     let slice = &strings[1..strings.len()];
 
-    for k in slice{ 
+    for k in slice {
         res.arg(k);
     }
 
-    let tte=res.arg(format!("{}",ourl))
-                        .spawn()
-                        .expect("failed to execute process");
-    eprintln!("{:?}",tte);
+    let tte = res.arg(format!("{}", ourl))
+        .spawn()
+        .expect("failed to execute process");
+    eprintln!("{:?}", tte);
     drop(root);
 
     Ok(())
