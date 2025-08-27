@@ -114,7 +114,7 @@ fn reinit(){
             // Use detected browsers from registry
             for (command, display_name) in detected_browsers {
                 // println!("{}------{}",display_name,command.trim_matches('"'));
-                prefstore::savepreference(appname, display_name, command.trim_matches('"').to_string());
+                prefstore::savepreference(appname, display_name, command.to_string());
             }
         }
     }
@@ -934,23 +934,93 @@ fn setframe(f:&mut Frame,s: &str){
     f.set_label(&ss);
 }
 // async 
-fn open(v: &String,ourl: &String)->Result<(),()>{
+
+use std::path::Path;
+
+fn open(v: &String, ourl: &String) -> Result<(), ()> {
     let root = span!(tracing::Level::INFO, "opening_browser", work_units = 2);
-   
 
-    let strings:Vec<String> = v.split_whitespace().map(str::to_string).collect();
-    let mut res = Command::new(format!("{}",strings[0]));
-    let slice = &strings[1..strings.len()];
+    // Split the input string into executable and arguments
+    let parts: Vec<String> = shlex::split(v).ok_or_else(|| {
+        eprintln!("Failed to parse browser path and arguments");
+        ()
+    })?;
 
-    for k in slice{ 
-        res.arg(k);
+    // If no executable is provided, use platform-specific default browser opener
+    if parts.is_empty() {
+        eprintln!("No executable provided, falling back to default browser");
+        let (cmd, args): (&str, Vec<&str>) = if cfg!(target_os = "windows") {
+            ("cmd.exe", vec!["/c", "start", "", ourl.as_str()])
+        } else if cfg!(target_os = "macos") {
+            ("open", vec![ourl.as_str()])
+        } else if cfg!(target_os = "linux") {
+            ("xdg-open", vec![ourl.as_str()])
+        } else {
+            eprintln!("Unsupported platform");
+            return Err(());
+        };
+
+        let mut res = Command::new(cmd);
+        res.args(&args);
+
+        let tte = res
+            .spawn()
+            .map_err(|e| {
+                eprintln!("Failed to execute default browser command: {:?}", e);
+                ()
+            })?;
+
+        eprintln!("Process: {:?}", tte);
+        drop(root);
+        return Ok(());
     }
 
-    let tte=res.arg(format!("{}",ourl))
-                        .spawn()
-                        .expect("failed to execute process");
-    eprintln!("{:?}",tte);
+    // Validate the executable path
+    let executable = &parts[0];
+    if !Path::new(executable).exists() {
+        eprintln!("Executable does not exist: {:?}", executable);
+        return Err(());
+    }
+
+    // Use the provided browser executable and arguments
+    let mut res = Command::new(executable);
+    println!("Executing: {:?}", executable);
+
+    // Add any additional arguments from the input (if any)
+    if parts.len() > 1 {
+        res.args(&parts[1..]);
+    }
+
+    // Add the URL as the final argument
+    res.arg(ourl);
+
+    let tte = res
+        .spawn()
+        .map_err(|e| {
+            eprintln!("Failed to execute process: {:?}", e);
+            ()
+        })?;
+
+    eprintln!("Process: {:?}", tte);
     drop(root);
 
     Ok(())
+}
+
+#[test]
+fn trybopen() {
+    // Test with browser path and arguments
+    let browser_path = if cfg!(target_os = "windows") {
+        // Use double backslashes in raw string to ensure correct parsing
+        r#""C:\Program Files\Google\Chrome\Application\chrome.exe" --incognito --new-window"#.to_string()
+    } else if cfg!(target_os = "macos") {
+        r#""/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --incognito --new-window"#.to_string()
+    } else {
+        r#"google-chrome --incognito --new-window"#.to_string()
+    };
+
+    open(&browser_path, &"https://google.com".to_string()).expect("Test failed");
+
+    // Test with empty path (default browser)
+    open(&"".to_string(), &"https://google.com".to_string()).expect("Test failed");
 }
