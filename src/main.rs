@@ -547,6 +547,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>>  {
     let root = span!(tracing::Level::INFO, "loading_ui", work_units = 2);
 
             let mut app = App::default();
+            // FLTK will still process some arguments but we'll handle them manually
             
             let mut win = Window::default().with_size(WIDGET_WIDTH, WIDGET_HEIGHT).with_label("Choose browser");
             win.handle(move |f, ev|{
@@ -778,7 +779,7 @@ let (s, r) = fltk::app::channel();
             vpack.end();    
             vpack.set_type(fltk::group::PackType::Vertical);
             
-            win.show_with_env_args();
+            win.show();
 
             win.end();
             win.show();
