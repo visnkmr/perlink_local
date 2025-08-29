@@ -735,25 +735,36 @@ let (s, r) = fltk::app::channel();
                     reinit();
                 }
                 
-                for (k,v) in prefstore::getall(appname).unwrap_or(vec![(String::new(),String::new())]) {
-                    let expandedurl=expandedurl.clone();
+                // Collect all browsers and sort them by flipped name for constant order
+                let mut browsers: Vec<(String, String)> = prefstore::getall(appname)
+                    .unwrap_or(vec![(String::new(), String::new())])
+                    .into_iter()
+                    .filter(|(k, _)| !k.is_empty())
+                    .collect();
+
+                // Sort by flipped name for consistent order
+                browsers.sort_by(|(k1, _), (k2, _)| {
+                    k1.to_lowercase().cmp(&k2.to_lowercase())
+                });
+
+                for (k, v) in browsers {
+                    let expandedurl = expandedurl.clone();
                     fltk::frame::Frame::default().with_size(20, 10);
-                    let k: String = k.chars().skip(0).take(10).collect();
-                    // let cc = k.chars().count();
-                    // let sz=cc*9;
-                    // let mut b1 = Button::default().with_size(sz.try_into().unwrap(),60);
-                    let mut b1 = Button::default().with_size(90,60);
-                    
-                    b1.set_label(&format!("{}",k));
-                    b1.emit(s.clone(),v);
-                    
-                    i+=1;
-                    if(i%3 ==0){
-                        // println!("i value--------->{}",i);
+
+                    // Flip the name for display (keep original for command)
+                    let flipped_name = flip_browser_name(&k);
+                    let display_name: String = flipped_name.chars().skip(0).take(10).collect();
+
+                    let mut b1 = Button::default().with_size(90, 60);
+                    b1.set_label(&format!("{}", display_name));
+                    b1.emit(s.clone(), v);
+
+                    i += 1;
+                    if(i % 3 == 0) {
                         hpack.end();
-                    hpack.set_type(fltk::group::PackType::Horizontal);
-                    fltk::frame::Frame::default().with_size(20, 10);
-                    hpack=fltk::group::Pack::default().with_size(250,40) .center_of(&win);
+                        hpack.set_type(fltk::group::PackType::Horizontal);
+                        fltk::frame::Frame::default().with_size(20, 10);
+                        hpack = fltk::group::Pack::default().with_size(250, 40).center_of(&win);
                     }
                 }
                 // let browsers = "";
@@ -928,6 +939,15 @@ let (s, r) = fltk::app::channel();
 #[cfg(target_os = "linux")]
 use arboard::SetExtLinux;
 const DAEMONIZE_ARG: &str = "__internal_daemonize";
+
+fn flip_browser_name(name: &str) -> String {
+    // Flip the name by reversing word order, e.g., "The firefox beta" -> "beta firefox the"
+    let words: Vec<&str> = name.split_whitespace().collect();
+    if words.is_empty() {
+        return name.to_string();
+    }
+    words.into_iter().rev().collect::<Vec<&str>>().join(" ")
+}
 
 fn setframe(f:&mut Frame,s: &str){
     let ss: String = s.chars().skip(0).take(40).collect();
