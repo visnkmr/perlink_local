@@ -42,9 +42,9 @@ tracing-opentelemetry = "0.17.2"
 # Allows you to export data to Jaeger
 opentelemetry-jaeger = "0.16.0"
 # Windows-specific dependencies
+shlex="1.3.0"
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.52"
-shlex="1.3.0"
 
 # Build dependencies for Windows icon
 [target.'cfg(target_os = "windows")'.build-dependencies]
